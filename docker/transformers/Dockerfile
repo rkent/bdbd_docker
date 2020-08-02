@@ -1,0 +1,10 @@
+# Hugging Face transformers with pytorch
+ARG UBUNTU_VERSION=20.04
+ARG TORCH_VERSION=1.6.0
+FROM bdbd/torch:${TORCH_VERSION}-ubuntu${UBUNTU_VERSION} as base
+
+ARG TRANSFORMERS_VERSION=3.0.2
+ARG TRANSFORMERS_CACHE=/var/cache/transformers
+ENV TRANSFORMERS_CACHE=${TRANSFORMERS_CACHE}
+
+RUN pip install transformers==${TRANSFORMERS_VERSION}

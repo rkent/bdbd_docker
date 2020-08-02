@@ -1,0 +1,15 @@
+# Enables forwarding of ip packets to docker containers
+
+# copy or ln to /etc/systemd/systemd
+# sudo systemctl enable bdforward
+
+[Unit]
+Description=BDBD enable forwarding to docker
+
+[Service]
+ExecStart=/bin/bash -c '/usr/sbin/iptables -N DOCKER-USER && /usr/sbin/iptables -I DOCKER-USER -j ACCEPT'
+User=root
+Type=oneshot
+
+[Install]
+WantedBy=multi-user.target
