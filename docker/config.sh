@@ -9,4 +9,4 @@ export TORCH_VERSION="1.6.0"
 export TRANSFORMERS_VERSION="3.0.2"
 export DEEPSPEECH_VERSION="0.8.0"
 export TF1_VERSION="1.15.0"
-
+export ROS_MASTER_URI=http://nano.dryrain.org:11311/

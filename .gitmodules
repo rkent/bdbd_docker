@@ -1,0 +1,3 @@
+[submodule "src/bdbd_common"]
+	path = src/bdbd_common
+	url = git@github.com:rkent/bdbd_common.git

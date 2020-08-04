@@ -1,13 +1,17 @@
 # Enables forwarding of ip packets to docker containers
+# turns out this is not needed if you use the host network, and never really
+# worked correctly with bridge networks.
 
 # copy or ln to /etc/systemd/systemd
 # sudo systemctl enable bdforward
 
 [Unit]
 Description=BDBD enable forwarding to docker
+After=network-online.target
 
 [Service]
-ExecStart=/bin/bash -c '/usr/sbin/iptables -N DOCKER-USER && /usr/sbin/iptables -I DOCKER-USER -j ACCEPT'
+#ExecStart=/bin/bash -c '/usr/sbin/iptables -N DOCKER-USER && /usr/sbin/iptables -I DOCKER-USER -j ACCEPT'
+ExecStart=/bin/bash -c '/usr/bin/docker ps && /usr/sbin/iptables -P FORWARD ACCEPT && /sbin/sysctl net.ipv4.conf.all.forwarding=1'
 User=root
 Type=oneshot
 

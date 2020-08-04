@@ -9,4 +9,5 @@ docker run \
   --hostname=transformers \
   --mount type=bind,source="/home/kent/.cache/torch/transformers",target=/var/cache/transformers \
   --mount type=bind,source="/home/kent/github/rkent/bdbd",target=/opt/bdbd \
-  bdbd/transformers:3.0.2-ubuntu20.04
+  bdbd/transformers:3.0.2-ubuntu20.04 \
+  /bin/bash
