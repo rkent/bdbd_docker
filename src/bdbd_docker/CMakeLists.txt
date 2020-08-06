@@ -162,6 +162,7 @@ include_directories(
 catkin_install_python(PROGRAMS
   nodes/dockers
   nodes/hello
+  nodes/dialogpt
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

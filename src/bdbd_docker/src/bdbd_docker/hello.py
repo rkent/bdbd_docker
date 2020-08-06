@@ -31,6 +31,7 @@ class Hello():
                 while not self.queue.empty():
                     req, responseQueue = self.queue.get()
                     rospy.loginfo('Got hello with data {}'.format(req.data))
+                    print('Got hello with data {}'.format(req.data))
                     responseQueue.put([True, 'Hi from Hello'])
             except:
                 rospy.logerr(traceback.format_exc())
