@@ -77,18 +77,20 @@ class DockerManagement():
         rospy.loginfo('process container name:{} command:{}'.format(name, command))
         result = 'unexpected'
 
+        container = None
         try:
             container = self.client.containers.get(name)
-            found = True
         except docker.errors.NotFound:
-            found = False
+            pass
 
         if command == 'start':
-            if found:
+            if container and container.status == 'running':
                 rospy.logwarn('Container {} already active'.format(name))
                 result = 'active'
             else:
                 try:
+                    if container:
+                        container.remove()
                     subprocess.run(['/opt/bdbd_docker/docker/' + name + '/run.sh'], check=True)
                     result = 'success'
                     self.containers.add(name)
@@ -96,13 +98,21 @@ class DockerManagement():
                     rospy.logerr(traceback.format_exc())
                     result = 'error'
         elif command == 'stop':
-            if found:
-                container = self.client.containers.get(name)
-                container.kill()
+            if container and container.status == 'running':
+                container.stop()
                 result = 'success'
+            elif container:
+                result = 'inactive'
             else:
                 result = 'notfound'
-            self.containers.discard(name)
+        elif command == 'kill':
+            if container and container.status == 'running':
+                container.kill()
+                result = 'success'
+            elif container:
+                result = 'inactive'
+            else:
+                result = 'notfound'
         else:
             rospy.logerr('Unexpected command: {}'.format(command))
         return result
@@ -112,7 +122,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-#client = docker.from_env()
-
-#client.containers.run("bdbd/hello:latest", "echo hello world")
