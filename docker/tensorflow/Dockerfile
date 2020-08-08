@@ -19,16 +19,12 @@
 # throughout. Please refer to the TensorFlow dockerfiles documentation
 # for more information.
 
-ARG UBUNTU_VERSION=20.04
-ARG CUDA=10.1
-ARG ARCH
-FROM bdbd/ros:noetic-ubuntu${UBUNTU_VERSION} as base
+ARG OS="ubuntu20.04"
+ARG ROS_VERSION="noetic"
+FROM bdbd/ros:${ROS_VERSION}-${OS} as base
 LABEL maintainer "R. Kent James <kent@caspia.com>"
 LABEL description "tensorflow 2.3.0 adapted for Ubuntu 20.04 with cuda 10.1"
-# ARCH and CUDA are specified again because the FROM directive resets ARGs
-# (but their default value is retained if set previously)
-ARG ARCH
-ARG CUDA
+ARG CUDA=10.1
 ARG CUDNN=7.6.4.38-1
 ARG CUDNN_MAJOR_VERSION=7
 ARG LIB_DIR_PREFIX=x86_64
@@ -60,12 +56,12 @@ RUN DEBIAN_FRONTEND=noninteractive && apt-get update && apt-get install -y --no-
         software-properties-common \
         unzip
 
-# Install TensorRT if not building for PowerPC
-RUN [[ "${ARCH}" = "ppc64le" ]] || { apt-get update && \
+# Install TensorRT
+RUN apt-get update && \
         apt-get install -y --no-install-recommends libnvinfer${LIBNVINFER_MAJOR_VERSION}=${LIBNVINFER}+cuda${CUDA} \
         libnvinfer-plugin${LIBNVINFER_MAJOR_VERSION}=${LIBNVINFER}+cuda${CUDA} \
         && apt-get clean \
-        && rm -rf /var/lib/apt/lists/*; }
+        && rm -rf /var/lib/apt/lists/*
 
 # For CUDA profiling, TensorFlow requires CUPTI.
 ENV LD_LIBRARY_PATH /usr/local/cuda/extras/CUPTI/lib64:/usr/local/cuda/lib64:$LD_LIBRARY_PATH
@@ -90,8 +86,8 @@ ENV LANG C.UTF-8
 # Set --build-arg TF_PACKAGE_VERSION=1.11.0rc0 to install a specific version.
 # Installs the latest version by default.
 ARG TF_PACKAGE=tensorflow
-ARG TF_PACKAGE_VERSION=
-RUN python3 -m pip install --no-cache-dir ${TF_PACKAGE}${TF_PACKAGE_VERSION:+==${TF_PACKAGE_VERSION}}
+ARG TF_VERSION="2.3.0"
+RUN python3 -m pip install --no-cache-dir ${TF_PACKAGE}${TF_VERSION:+==${TF_VERSION}}
 
 COPY bashrc /etc/bash.bashrc
 RUN chmod a+rwx /etc/bash.bashrc

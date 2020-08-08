@@ -7,8 +7,5 @@ NAME=$(basename $DIRNAME)
 source "$DIRNAME/../config.sh"
 
 docker build \
-  -t "${BASE_NAME}/$NAME:${TF_VERSION}-${OS}" -t "${BASE_NAME}/$NAME:latest" \
-  --build-arg TF_VERSION=$TF_VERSION \
-  --build-arg OS=$OS \
-  --build-arg ROS_VERSION=$ROS_VERSION \
-  $DIRNAME
+  -t "${BASE_NAME}/$NAME:${CUDA_VERSION}-${OS}" -t "${BASE_NAME}/$NAME:latest" \
+  $DIRNAME/dist/$OS/$CUDA_VERSION/base

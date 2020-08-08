@@ -21,4 +21,4 @@ COPY rosrun.sh .
 RUN chmod 755 *.*
 RUN chown 1000:1000 *.*
 
-CMD ["bash", "rosrun.sh"]
+CMD ["/opt/app/rosrun.sh"]

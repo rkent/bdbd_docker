@@ -20,7 +20,7 @@ import traceback
 from bdbd_common.srv import DockerCommand
 from queue import Queue
 import docker
-import platform
+#import platform
 
 ROS_IP = '192.168.0.59'
 ROS_MASTER_URI =' http://nano.dryrain.org:11311/'
@@ -31,8 +31,8 @@ class DockerManagement():
         self.client = {}
         self.client = docker.from_env()
         self.containers = set()
-        hostname = platform.node().split('.')[0]
-        self.dockersService = rospy.Service('/bdbd_docker/' + hostname + '/containers', DockerCommand, self.handle_containers)
+        #hostname = platform.node().split('.')[0]
+        self.dockersService = rospy.Service('/bdbd_docker/containers', DockerCommand, self.handle_containers)
         rate = rospy.Rate(100)
         self.mainQueue = Queue()
         rospy.loginfo('Ready to process commands')
@@ -92,7 +92,7 @@ class DockerManagement():
                     if container:
                         container.remove()
                     subprocess.run(['/opt/bdbd_docker/docker/' + name + '/run.sh'], check=True)
-                    result = 'success'
+                    result = 'started'
                     self.containers.add(name)
                 except:
                     rospy.logerr(traceback.format_exc())
@@ -100,7 +100,7 @@ class DockerManagement():
         elif command == 'stop':
             if container and container.status == 'running':
                 container.stop()
-                result = 'success'
+                result = 'stopped'
             elif container:
                 result = 'inactive'
             else:
@@ -108,7 +108,7 @@ class DockerManagement():
         elif command == 'kill':
             if container and container.status == 'running':
                 container.kill()
-                result = 'success'
+                result = 'killed'
             elif container:
                 result = 'inactive'
             else:

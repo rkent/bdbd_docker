@@ -4,6 +4,8 @@
 
 import rospy
 import traceback
+import signal
+import time
 from bdbd_common.srv import Dialog
 try:
     from Queue import Queue
@@ -16,9 +18,10 @@ import torch
 
 PERIOD = 0.01 # update time in seconds
 CONTEXT_COUNT = 8 # maximum number of context items
+
 class DialoGPT():
     def __init__(self):
-        rospy.init_node('dialogpt')
+        rospy.init_node('dialogpt', disable_signals=True)
         name = rospy.get_name()
         rospy.loginfo(name + ' starting')
         self.queue = Queue()
@@ -28,6 +31,17 @@ class DialoGPT():
         rospy.loginfo(name + ' done with init')
         rospy.Service('/bdbd/dialog', Dialog, self.on_service_call)
 
+        # https://stackoverflow.com/questions/18499497/how-to-process-sigterm-signal-gracefully
+        signal.signal(signal.SIGINT, self.exit_gracefully)
+        signal.signal(signal.SIGTERM, self.exit_gracefully)
+        self.active = True     
+
+    def exit_gracefully(self, signum, frame):
+        rospy.loginfo('node {} shutting down 2'.format(rospy.get_name()))
+        rospy.signal_shutdown('Got shutdown')
+        print('Initiated shutdown')
+        self.active = False
+
     def on_service_call(self, req):
         responseQueue = Queue()
         self.queue.put([req, responseQueue])
@@ -35,7 +49,7 @@ class DialoGPT():
         return(response)
 
     def run(self):
-        while not rospy.is_shutdown():
+        while self.active and not rospy.is_shutdown():
             try:
                 while not self.queue.empty():
                     start = time.time()
@@ -72,6 +86,7 @@ class DialoGPT():
             except:
                 rospy.logerr(traceback.format_exc())
             rospy.sleep(PERIOD)
+        print("Ready to shutdown")
 
 def main():
     dialogpt = DialoGPT()
