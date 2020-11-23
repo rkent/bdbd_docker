@@ -16,3 +16,4 @@ export ROS_MASTER_URI=http://nano.dryrain.org:11311/
 export ROS_IP="192.168.0.59"
 export ROS_NAMESPACE="/bdbd"
 export TRANSFORMERS_CACHE=/opt/bdbd_docker/.transformerscache
+export TF_MODELS_VERSION="2.3.0"
