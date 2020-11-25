@@ -43,12 +43,12 @@ class Path
     // 1st derivatives
     ArrayXXd dpxdl, dpxdr, dpydl, dpydr;
     // 2nd derivatives
-    vector<vector<ArrayXd>> d2pxdldl;
-    vector<vector<ArrayXd>> d2pxdldr;
-    vector<vector<ArrayXd>> d2pxdrdr;
-    vector<vector<ArrayXd>> d2pydldl;
-    vector<vector<ArrayXd>> d2pydldr;
-    vector<vector<ArrayXd>> d2pydrdr;
+    ArrayXXd d2pxdldl;
+    ArrayXXd d2pxdldr;
+    ArrayXXd d2pxdrdr;
+    ArrayXXd d2pydldl;
+    ArrayXXd d2pydldr;
+    ArrayXXd d2pydrdr;
     
     double dt;
     double lossValue;
@@ -204,7 +204,7 @@ class Path
         mmax = ammax;
     }
 
-    double losses()
+    double losses(bool details=false)
     {
         // values requiring summing over i
         auto sumMax = 0.1 * Wmax * (
@@ -241,7 +241,9 @@ class Path
         sumTargets *= 0.5;
 
         lossValue = sumMax + sumJerk + sumTargets + sumBack;
-        cout << "loss " << lossValue << " sumMax " << sumMax << " sumJerk " << sumJerk << " sumTargets " << sumTargets << " sumBack " << sumBack << '\n';
+        if (details) {
+            cout << "loss " << lossValue << " sumMax " << sumMax << " sumJerk " << sumJerk << " sumTargets " << sumTargets << " sumBack " << sumBack << '\n';
+        }
         return lossValue;
     }
 
@@ -325,23 +327,13 @@ class Path
 
     void seconds()
     {
-        // Hessians
-        for (int j = 0; j < n; j++) {
-            d2pxdldl.push_back(vector<ArrayXd>());
-            d2pxdldr.push_back(vector<ArrayXd>());
-            d2pxdrdr.push_back(vector<ArrayXd>());
-            d2pydldl.push_back(vector<ArrayXd>());
-            d2pydldr.push_back(vector<ArrayXd>());
-            d2pydrdr.push_back(vector<ArrayXd>());
-            for (int k = 0; k < n; k++) {
-                d2pxdldl.back().push_back(ArrayXd::Zero(n));
-                d2pxdldr.back().push_back(ArrayXd::Zero(n));
-                d2pxdrdr.back().push_back(ArrayXd::Zero(n));
-                d2pydldl.back().push_back(ArrayXd::Zero(n));
-                d2pydldr.back().push_back(ArrayXd::Zero(n));
-                d2pydrdr.back().push_back(ArrayXd::Zero(n));
-            }
-        }
+        d2pxdldl = ArrayXXd::Zero(n, n);
+        d2pxdldr = ArrayXXd::Zero(n, n);
+        d2pxdrdr = ArrayXXd::Zero(n, n);
+        d2pydldl = ArrayXXd::Zero(n, n);
+        d2pydldr = ArrayXXd::Zero(n, n);
+        d2pydrdr = ArrayXXd::Zero(n, n);
+
         for (int j = 1; j < n; j++) {
             // cout << "j " << j << '\n';
             double vxwdt = vxwj[j] * dt;
@@ -349,7 +341,6 @@ class Path
             double sdt = sinj[j] * dt;
             double cdt = cosj[j] * dt;
 
-            // TODO: we really only use d2[n][][]
             for (int k = 1; k <= j; k++) {
                 // cout << "k " << k << '\n';
                 double betaljk = betaj[j-k] * bhol;
@@ -398,15 +389,12 @@ class Path
                         +cdt * (betarjk * alphayrjm +alphayrjk * betarjm)
                     );
 
-                    for (int i = j; i < n; i++) {
-                        // cout << "i " << i << '\n';
-                        d2pxdldl[k][m][i] += sumxll;
-                        d2pxdldr[k][m][i] += sumxlr;
-                        d2pxdrdr[k][m][i] += sumxrr;
-                        d2pydldl[k][m][i] += sumyll;
-                        d2pydldr[k][m][i] += sumylr;
-                        d2pydrdr[k][m][i] += sumyrr;
-                    }
+                    d2pxdldl(k, m) += sumxll;
+                    d2pxdldr(k, m) += sumxlr;
+                    d2pxdrdr(k, m) += sumxrr;
+                    d2pydldl(k, m) += sumyll;
+                    d2pydldr(k, m) += sumylr;
+                    d2pydrdr(k, m) += sumyrr;
                 }
             }
         }
@@ -460,12 +448,12 @@ class Path
                     dthds = betaj[nh-m] * bhol;
                     
                     if (kleft) {
-                        d2px = d2pxdldl[k][m][nh];
-                        d2py = d2pydldl[k][m][nh];
+                        d2px = d2pxdldl(k, m);
+                        d2py = d2pydldl(k, m);
                     } else {
                         // note d2pxdrdl[i,j] = d2pxdldr[j,i]
-                        d2px = d2pxdldr[m][k][nh];
-                        d2py = d2pydldr[m][k][nh];
+                        d2px = d2pxdldr(m, k);
+                        d2py = d2pydldr(m, k);
                     }
                 }
                 else {
@@ -476,11 +464,11 @@ class Path
                     domds = alphaoj[nh-m] * bhor;
                     dthds = betaj[nh-m] * bhor;
                     if (kleft) {
-                        d2px = d2pxdldr[k][m][nh];
-                        d2py = d2pydldr[k][m][nh];
+                        d2px = d2pxdldr(k, m);
+                        d2py = d2pydldr(k, m);
                     } else {
-                        d2px = d2pxdrdr[k][m][nh];
-                        d2py = d2pydrdr[k][m][nh];
+                        d2px = d2pxdrdr(k, m);
+                        d2py = d2pydrdr(k, m);
                     }
                 }
                 hess(i, j) = (
@@ -551,17 +539,20 @@ class Path
         for (int count = 0; count < nsteps; count++) {
             using dseconds = std::chrono::duration<double>;
             vector<double> times;
-            pose();
-            loss = losses();
-            //times.push_back(dseconds(chrono::steady_clock::now() - start).count());
-            gradients();
-            //times.push_back(dseconds(chrono::steady_clock::now() - start).count());
-            jacobian();
-            //times.push_back(dseconds(chrono::steady_clock::now() - start).count());
             auto start = chrono::steady_clock::now();
+            times.push_back(0.0);
+            pose();
+            times.push_back(dseconds(chrono::steady_clock::now() - start).count());
+            loss = losses(true);
+            times.push_back(dseconds(chrono::steady_clock::now() - start).count());
+            gradients();
+            times.push_back(dseconds(chrono::steady_clock::now() - start).count());
+            jacobian();
+            times.push_back(dseconds(chrono::steady_clock::now() - start).count());
             seconds();
             times.push_back(dseconds(chrono::steady_clock::now() - start).count());
             hessian();
+            times.push_back(dseconds(chrono::steady_clock::now() - start).count());
             
             VectorXd mjacobian(2*nh);
             // assemble the full jacobian from the lefts and rights
@@ -570,18 +561,20 @@ class Path
                 bool kleft = (i < nh);
                 mjacobian(i) = kleft ? -dlefts[k] : -drights[k];
             }
-            //times.push_back(dseconds(chrono::steady_clock::now() - start).count());
-            VectorXd deltax = hess.fullPivLu().solve(mjacobian);
             times.push_back(dseconds(chrono::steady_clock::now() - start).count());
-            cout << "lefts" << lefts.format(CommaInitFmt) << '\n';
-            cout << "rights" << rights.format(CommaInitFmt) << '\n';
-            cout << "loss is " << loss << '\n';
-            cout << "b" << mjacobian.format(CommaInitFmt) << '\n';
-            cout << "hess.row(3)\n" << hess.row(3).format(ShortFmt) << '\n';
-            cout << "deltax" << deltax.format(CommaInitFmt) << '\n';
+            VectorXd deltax = hess.partialPivLu().solve(mjacobian);
+            times.push_back(dseconds(chrono::steady_clock::now() - start).count());
+            // cout << "lefts" << lefts.format(CommaInitFmt) << '\n';
+            // cout << "rights" << rights.format(CommaInitFmt) << '\n';
+            // cout << "loss is " << loss << '\n';
+            // cout << "b" << mjacobian.format(CommaInitFmt) << '\n';
+            // cout << "hess.row(3)\n" << hess.row(3).format(ShortFmt) << '\n';
+            // cout << "deltax" << "(" << n << ") " << deltax.format(CommaInitFmt) << '\n';
             cout << "times ";
-            for (auto ttt: times) cout << ttt << ' ';
-            cout << '\n';
+            for (int i = 1; i < times.size()-1; ++i) {
+                cout << times[i] - times[i-1] << ' ';
+            }
+            cout << "total " << times[times.size() - 1] << '\n';
             auto base_lefts = lefts;
             auto base_rights = rights;
             // line search over deltax looking for best eps
@@ -590,16 +583,16 @@ class Path
             int maxi;
             abs(deltax.array()).maxCoeff(&maxi);
             auto slew = abs(deltax[maxi]);
-            double maxSlew = 1.0;
+            double maxSlew = 2.0;
             double worst_eps = -1.0;
             if (slew > maxSlew) {
                 cout << "Limiting slew rate\n";
                 worst_eps = maxSlew / slew;
                 eps = worst_eps / 2.0;
             }
-            for (int lcount = 0; lcount < 6; lcount++) {
+            for (int lcount = 0; lcount < 4; lcount++) {
                 // update lefts, rights
-                for (int i = 0; i < nh; i++) {
+                for (int i = 0; i < 2*nh; i++) {
                     auto k = i % nh + 1;
                     bool kleft = (i < nh);
                     if (kleft) {
@@ -611,7 +604,7 @@ class Path
 
                 pose();
                 loss = losses();
-                cout << "eps: " << eps << " loss " << loss << "\n";
+                auto last_eps = eps;
                 if (loss > best_loss) {
                     worst_eps = eps;
                 } else {
@@ -623,11 +616,13 @@ class Path
                 } else {
                     eps = 0.5 * (best_eps + worst_eps);
                 }
+                cout << " loss " << loss << " eps: " << last_eps << " best_eps: " << best_eps << '\n';
             }
-            eps = min(best_eps, 1.0);
-/*
-*/
-            // update lefts, rights
+            eps = best_eps;
+            // eps = min(best_eps, 1.0);
+            cout << " using eps " << eps << '\n';
+
+            // update lefts, rights with best_eps
             for (int i = 0; i < 2*nh; i++) {
                 auto k = i % nh + 1;
                 bool kleft = (i < nh);
@@ -644,6 +639,9 @@ class Path
 void rawLRcallback(const bdbd_common::LeftRightsConstPtr& leftRights)
 {
     cout << "\n***** received LR *****\n";
+    using dseconds = std::chrono::duration<double>;
+    auto start = chrono::steady_clock::now();
+
     auto dt = leftRights->dt;
     auto msgLefts = leftRights->lefts;
     auto msgRights = leftRights->rights;
@@ -657,20 +655,35 @@ void rawLRcallback(const bdbd_common::LeftRightsConstPtr& leftRights)
     const ArrayXd rights = ArrayXd::Map(msgRights.data(), n);
 
     path.pose_init(lefts, rights, start_pose, start_twist);
-    const vector<double> target_pose = {0.06, 0.01, 0.0 * D_TO_R};
+    const vector<double> target_pose = {0.2, 0.1, 0.0 * D_TO_R};
     const vector<double> target_twist = {0.0, 0.0, 0.0};
     const vector<double> target_lr = {0.0, 0.0};
-    const double Wmax = dt * 1.e-3;
+    const double Wmax = dt * 5.e-4;
     const double Wjerk = dt * 1.e-3;
     const double Wback = 1.0;
     const double mmax = 1.0;
 
     path.loss_init(target_pose, target_twist, target_lr, Wmax, Wjerk, Wback, mmax);
-    //cout << " lefts" << lefts.format(path.CommaInitFmt) << '\n';
-    //cout << " rights" << rights.format(path.CommaInitFmt) << '\n';
     // auto loss = path.gradient_descent(10, 0.5);
     // ROS_INFO_STREAM("final loss is " << loss);
-    path.newton_raphson(3, 1.0);
+    path.newton_raphson(10, 1.0);
+
+    auto nr_time = ((dseconds)(chrono::steady_clock::now() - start)).count();
+
+    double lrMax = 0.0;
+    for (auto i = 0; i < path.lefts.size(); i++) {
+        if (abs(path.lefts[i]) > lrMax) lrMax = abs(path.lefts[i]);
+        if (abs(path.rights[i]) > lrMax) lrMax = abs(path.rights[i]);
+
+    }
+    cout << " lrMax " << lrMax;
+    cout << " n " << 2*(path.lefts.size() - 1);
+    cout << " sim time " << dt * (path.lefts.size() - 1);
+    cout << " nr time " << nr_time;
+    cout << '\n';
+
+    cout << " lefts" << path.lefts.format(path.CommaInitFmt) << '\n';
+    cout << " rights" << path.rights.format(path.CommaInitFmt) << '\n';
     cout << " pxj" << path.pxj.format(path.CommaInitFmt) << '\n';
     cout << " pyj" << path.pyj.format(path.CommaInitFmt) << '\n';
     //path.pose();
@@ -689,11 +702,6 @@ void rawLRcallback(const bdbd_common::LeftRightsConstPtr& leftRights)
 
 int main(int argc, char **argv)
 {
-    using dseconds = std::chrono::duration<double>;
-    auto now = chrono::steady_clock::now();
-    auto diff = chrono::steady_clock::now() - now;
-    cout << dseconds(diff).count() << '\n';
-
     printf("lrTweak here\n");
     cout.setf(std::ios::unitbuf);
     ros::init(argc, argv, "lrTweak");
