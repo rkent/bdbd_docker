@@ -20,18 +20,6 @@ using namespace std;
 class Path
 {
     public:
-    /*
-    lr_model = ((1.0, 1.0, 10.0), (-1.0, 1.0, 10.0), (-1.0, 10.0, 10.0))
-    alr_model = np.array(lr_model)
-    bhes = (dt * alr_model[0], dt * alr_model[1], dt * alr_model[2])
-    (bhxl, bhxr, qhx) = bhes[0]
-    (bhyl, bhyr, qhy) = bhes[1]
-    (bhol, bhor, qho) = bhes[2]
-    (bhxl, bhxr, qhx) = bhes[0]
-    (bhyl, bhyr, qhy) = bhes[1]
-    (bhol, bhor, qho) = bhes[2]
-    */
-
     // class variables
 
     // dynamic model
@@ -75,10 +63,15 @@ class Path
     // intermediate values
     ArrayXd cosj, sinj, vxcj, vxsj, vycj, vysj, vxwj, vywj;
 
+    // Jacobian
     vector<double> dlefts, drights;
 
+    // Hessian
+    MatrixXd hess;
+
     IOFormat CommaInitFmt = IOFormat(5, Eigen::DontAlignCols, ", ", ", ", "", "", "[ ", " ]");
-    IOFormat HeavyFmt = IOFormat(10, 0, ", ", " ", "\n[", "]", "[", "]");
+    IOFormat HeavyFmt = IOFormat(7, 0, ", ", " ", "\n[", "]", "[", "]");
+    IOFormat ShortFmt = IOFormat(4, 0, ", ", " ", "\n[", "]", "[", "]");
 
     public:
     Path(double dt)
@@ -248,7 +241,7 @@ class Path
         sumTargets *= 0.5;
 
         lossValue = sumMax + sumJerk + sumTargets + sumBack;
-        cout << "sumMax " << sumMax << " sumJerk " << sumJerk << " sumTargets " << sumTargets << " sumBack " << sumBack;
+        cout << "loss " << lossValue << " sumMax " << sumMax << " sumJerk " << sumJerk << " sumTargets " << sumTargets << " sumBack " << sumBack << '\n';
         return lossValue;
     }
 
@@ -356,6 +349,7 @@ class Path
             double sdt = sinj[j] * dt;
             double cdt = cosj[j] * dt;
 
+            // TODO: we really only use d2[n][][]
             for (int k = 1; k <= j; k++) {
                 // cout << "k " << k << '\n';
                 double betaljk = betaj[j-k] * bhol;
@@ -419,6 +413,112 @@ class Path
 
     }
 
+    void hessian()
+    {
+        // second derivative of loss relative to left, rights
+        auto pxt = target_pose[0];
+        auto pyt = target_pose[1];
+        int nh = n - 1;
+        // We'll define this as 0 -> nh-1 are lefts[1:], nh -> 2nh-1 are rights[1:]
+        hess = MatrixXd(2*nh, 2*nh);
+
+        // values that vary with each k, m value
+        auto deltapxn = pxj[nh] - pxt;
+        auto deltapyn = pyj[nh] - pyt;
+        for (int i = 0; i < 2*nh; i++) {
+            auto k = i % nh + 1;
+
+            bool kleft = (i < nh);
+            double dpxdu, dpydu, dvxdu, dvydu, domdu, dthdu;
+            if (kleft) {
+                dpxdu = dpxdl(nh, k);
+                dpydu = dpydl(nh, k);
+                dvxdu = alphaxj[nh-k] * bhxl;
+                dvydu = alphayj[nh-k] * bhyl;
+                domdu = alphaoj[nh-k] * bhol;
+                dthdu = betaj[nh-k] * bhol;
+            }
+            else {
+                dpxdu = dpxdr(nh, k);
+                dpydu = dpydr(nh, k);
+                dvxdu = alphaxj[nh-k] * bhxr;
+                dvydu = alphayj[nh-k] * bhyr;
+                domdu = alphaoj[nh-k] * bhor;
+                dthdu = betaj[nh-k] * bhor;
+            }
+
+            for (auto j = 0; j < 2 * nh; j++) {
+                auto m = j % nh + 1;
+                bool mleft = (j < nh);
+                double dpxds, dpyds, dvxds, dvyds, domds, dthds, d2px, d2py;
+                if (mleft) {
+                    dpxds = dpxdl(nh, m);
+                    dpyds = dpydl(nh, m);
+                    dvxds = alphaxj[nh-m] * bhxl;
+                    dvyds = alphayj[nh-m] * bhyl;
+                    domds = alphaoj[nh-m] * bhol;
+                    dthds = betaj[nh-m] * bhol;
+                    
+                    if (kleft) {
+                        d2px = d2pxdldl[k][m][nh];
+                        d2py = d2pydldl[k][m][nh];
+                    } else {
+                        // note d2pxdrdl[i,j] = d2pxdldr[j,i]
+                        d2px = d2pxdldr[m][k][nh];
+                        d2py = d2pydldr[m][k][nh];
+                    }
+                }
+                else {
+                    dpxds = dpxdr(nh, m);
+                    dpyds = dpydr(nh, m);
+                    dvxds = alphaxj[nh-m] * bhxr;
+                    dvyds = alphayj[nh-m] * bhyr;
+                    domds = alphaoj[nh-m] * bhor;
+                    dthds = betaj[nh-m] * bhor;
+                    if (kleft) {
+                        d2px = d2pxdldr[k][m][nh];
+                        d2py = d2pydldr[k][m][nh];
+                    } else {
+                        d2px = d2pxdrdr[k][m][nh];
+                        d2py = d2pydrdr[k][m][nh];
+                    }
+                }
+                hess(i, j) = (
+                    deltapxn * d2px + dpxdu * dpxds +
+                    deltapyn * d2py + dpydu * dpyds +
+                    dvxdu * dvxds + dvydu * dvyds + domdu * domds + dthdu * dthds
+                );
+            }
+        }
+        // values that require k == m
+        for (int i = 0; i < 2 * nh; i++) {
+            auto k = i % nh + 1;
+            bool kleft = (i < nh);
+            // max term
+            double term = hess(i, i) + 9. * (Wmax / pow(mmax, 2))
+                * pow(kleft ? lefts[k] : rights[k], 8);
+            // back term
+            if (lefts[k] + rights[k] < 0.0 ) {
+                term += 9. * Wback * pow(lefts[k] + rights[k], 8);
+            }
+            // motor target value
+            if (k == nh) {
+                term += 1.0;
+            }
+            // jerk term
+            term += 2 * Wjerk;
+            if (k > 1) {
+                hess(i, i-1) -= Wjerk;
+            }
+            if (k == nh) {
+                term -= Wjerk;
+            } else {
+                hess(i, i+1) -= Wjerk;
+            }
+            hess(i, i) = term;
+        }
+    }
+
     double gradient_descent(int nsteps, double eps)
     {
         double loss = 0.0;
@@ -443,11 +543,107 @@ class Path
         }
         return loss;
     }
-};
 
+    void newton_raphson(int nsteps, double eps)
+    {
+        double loss = 0.0;
+        auto nh = n-1;
+        for (int count = 0; count < nsteps; count++) {
+            using dseconds = std::chrono::duration<double>;
+            vector<double> times;
+            pose();
+            loss = losses();
+            //times.push_back(dseconds(chrono::steady_clock::now() - start).count());
+            gradients();
+            //times.push_back(dseconds(chrono::steady_clock::now() - start).count());
+            jacobian();
+            //times.push_back(dseconds(chrono::steady_clock::now() - start).count());
+            auto start = chrono::steady_clock::now();
+            seconds();
+            times.push_back(dseconds(chrono::steady_clock::now() - start).count());
+            hessian();
+            
+            VectorXd mjacobian(2*nh);
+            // assemble the full jacobian from the lefts and rights
+            for (int i = 0; i < 2*nh; i++) {
+                auto k = i % nh + 1;
+                bool kleft = (i < nh);
+                mjacobian(i) = kleft ? -dlefts[k] : -drights[k];
+            }
+            //times.push_back(dseconds(chrono::steady_clock::now() - start).count());
+            VectorXd deltax = hess.fullPivLu().solve(mjacobian);
+            times.push_back(dseconds(chrono::steady_clock::now() - start).count());
+            cout << "lefts" << lefts.format(CommaInitFmt) << '\n';
+            cout << "rights" << rights.format(CommaInitFmt) << '\n';
+            cout << "loss is " << loss << '\n';
+            cout << "b" << mjacobian.format(CommaInitFmt) << '\n';
+            cout << "hess.row(3)\n" << hess.row(3).format(ShortFmt) << '\n';
+            cout << "deltax" << deltax.format(CommaInitFmt) << '\n';
+            cout << "times ";
+            for (auto ttt: times) cout << ttt << ' ';
+            cout << '\n';
+            auto base_lefts = lefts;
+            auto base_rights = rights;
+            // line search over deltax looking for best eps
+            double best_eps = 0.0;
+            double best_loss = loss;
+            int maxi;
+            abs(deltax.array()).maxCoeff(&maxi);
+            auto slew = abs(deltax[maxi]);
+            double maxSlew = 1.0;
+            double worst_eps = -1.0;
+            if (slew > maxSlew) {
+                cout << "Limiting slew rate\n";
+                worst_eps = maxSlew / slew;
+                eps = worst_eps / 2.0;
+            }
+            for (int lcount = 0; lcount < 6; lcount++) {
+                // update lefts, rights
+                for (int i = 0; i < nh; i++) {
+                    auto k = i % nh + 1;
+                    bool kleft = (i < nh);
+                    if (kleft) {
+                        lefts[k] = base_lefts[k] + eps * deltax(i);
+                    } else {
+                        rights[k] = base_rights[k] + eps * deltax(i);
+                    }
+                }
+
+                pose();
+                loss = losses();
+                cout << "eps: " << eps << " loss " << loss << "\n";
+                if (loss > best_loss) {
+                    worst_eps = eps;
+                } else {
+                    best_eps = eps;
+                    best_loss = loss;
+                }
+                if (worst_eps < 0.0) {
+                    eps *= 2;
+                } else {
+                    eps = 0.5 * (best_eps + worst_eps);
+                }
+            }
+            eps = min(best_eps, 1.0);
+/*
+*/
+            // update lefts, rights
+            for (int i = 0; i < 2*nh; i++) {
+                auto k = i % nh + 1;
+                bool kleft = (i < nh);
+                if (kleft) {
+                    lefts[k] = base_lefts[k] + eps * deltax(i);
+                } else {
+                    rights[k] = base_rights[k] + eps * deltax(i);
+                }
+            }
+        }
+    }
+};
 
 void rawLRcallback(const bdbd_common::LeftRightsConstPtr& leftRights)
 {
+    cout << "\n***** received LR *****\n";
     auto dt = leftRights->dt;
     auto msgLefts = leftRights->lefts;
     auto msgRights = leftRights->rights;
@@ -461,7 +657,7 @@ void rawLRcallback(const bdbd_common::LeftRightsConstPtr& leftRights)
     const ArrayXd rights = ArrayXd::Map(msgRights.data(), n);
 
     path.pose_init(lefts, rights, start_pose, start_twist);
-    const vector<double> target_pose = {0.1, -0.1, 90.0 * D_TO_R};
+    const vector<double> target_pose = {0.06, 0.01, 0.0 * D_TO_R};
     const vector<double> target_twist = {0.0, 0.0, 0.0};
     const vector<double> target_lr = {0.0, 0.0};
     const double Wmax = dt * 1.e-3;
@@ -470,37 +666,34 @@ void rawLRcallback(const bdbd_common::LeftRightsConstPtr& leftRights)
     const double mmax = 1.0;
 
     path.loss_init(target_pose, target_twist, target_lr, Wmax, Wjerk, Wback, mmax);
-    /*
-    cout << " lefts" << lefts.format(path.CommaInitFmt) << '\n';
-    cout << " rights" << rights.format(path.CommaInitFmt) << '\n';
+    //cout << " lefts" << lefts.format(path.CommaInitFmt) << '\n';
+    //cout << " rights" << rights.format(path.CommaInitFmt) << '\n';
+    // auto loss = path.gradient_descent(10, 0.5);
+    // ROS_INFO_STREAM("final loss is " << loss);
+    path.newton_raphson(3, 1.0);
     cout << " pxj" << path.pxj.format(path.CommaInitFmt) << '\n';
     cout << " pyj" << path.pyj.format(path.CommaInitFmt) << '\n';
-    */
-    auto loss = path.gradient_descent(100, 0.5);
-    ROS_INFO_STREAM("final loss is " << loss);
-    /*
-    path.pose();
-    auto loss = path.losses();
-    path.gradients();
-    path.jacobian();
-    */
-    /*
-    Map<ArrayXXd> adpydr(path.dpydr.data(), n, n);
-    Map<ArrayXd> adlefts(path.dlefts.data(), path.dlefts.size());
-    Map<ArrayXd> adrights(path.drights.data(), path.drights.size());
+    //path.pose();
+    //auto loss = path.losses();
+    //path.gradients();
+    //path.jacobian();
+
+    //Map<ArrayXXd> adpydr(path.dpydr.data(), n, n);
+    //Map<ArrayXd> adlefts(path.dlefts.data(), path.dlefts.size());
+    //Map<ArrayXd> adrights(path.drights.data(), path.drights.size());
     // ROS_INFO_STREAM("dpydr: " << adpydr.format(path.HeavyFmt) << '\n');
     // ROS_INFO_STREAM("dlefts: " << adlefts.format(path.CommaInitFmt) <<'\n');
     // ROS_INFO_STREAM("drights: " << adrights.format(path.CommaInitFmt) << '\n');
-    */
 
 }
 
 int main(int argc, char **argv)
 {
-/**
-* The ros::init() function needs to see argc and argv so that it can perform
-* any ROS arguments and name remapping that were provided at the command line.
-*/
+    using dseconds = std::chrono::duration<double>;
+    auto now = chrono::steady_clock::now();
+    auto diff = chrono::steady_clock::now() - now;
+    cout << dseconds(diff).count() << '\n';
+
     printf("lrTweak here\n");
     cout.setf(std::ios::unitbuf);
     ros::init(argc, argv, "lrTweak");
@@ -510,4 +703,4 @@ int main(int argc, char **argv)
 
     ros::spin();
     return(0);
-}
+};
