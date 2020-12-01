@@ -1,6 +1,16 @@
 // Given left/right values and constraints, tweak left/right to optimize
 
-#include "lrPath.cpp"
+
+#include "lrPath.h"
+
+#include <ros/ros.h>
+#include <ros/console.h>
+#include <actionlib/server/simple_action_server.h>
+#include "bdbd_common/LeftRights.h"
+#include "bdbd_common/LrOptimizeAction.h"
+
+using namespace std;
+using namespace Eigen;
 
 class LrTweakAction {
     using dseconds = std::chrono::duration<double>;
