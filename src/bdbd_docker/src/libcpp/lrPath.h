@@ -59,7 +59,7 @@ public:
 
     array3 start_pose, start_twist, target_pose, target_twist;
     array2 target_lr;
-    double Wmax, Wjerk, Wback, mmax;
+    double Wmax, Wjerk, Wback, mmax, converge_ratio;
 
     // intermediate values
     Eigen::ArrayXd cosj, sinj, vxcj, vxsj, vycj, vysj, vxwj, vywj;
@@ -75,19 +75,8 @@ public:
     Eigen::IOFormat ShortFmt = Eigen::IOFormat(4, 0, ", ", " ", "\n[", "]", "[", "]");
 
     public:
-    Path(double dt)
-    : dt(dt)
+    Path()
     {
-        bhxl = bxl * dt;
-        bhxr = bxr * dt;
-        bhyl = byl * dt;
-        bhyr = byr * dt;
-        bhol = bol * dt;
-        bhor = bor * dt;
-
-        alphax = 1.0 - qx * dt;
-        alphay = 1.0 - qy * dt;
-        alphao = 1.0 - qo * dt;
     }
 
     ~Path()
@@ -96,11 +85,17 @@ public:
 
     public:
     void pose_init(
+        const double dt,
         const Eigen::ArrayXd aLefts,
         const Eigen::ArrayXd aRights,
         array3 aStart_pose,
         array3 aStart_twist);
-    
+
+    void pose_init(
+        const double dt,
+        array3 aStart_pose,
+        array3 aStart_twist);
+
     void pose();
 
     void loss_init(

@@ -5,6 +5,7 @@ using namespace std;
 using namespace Eigen;
 
 void Path::pose_init(
+    const double adt,
     const ArrayXd aLefts,
     const ArrayXd aRights,
     array3 aStart_pose,
@@ -12,9 +13,29 @@ void Path::pose_init(
 {
     lefts = aLefts;
     rights = aRights;
+    pose_init(adt, aStart_pose, aStart_twist);
+}
+
+void Path::pose_init(
+    const double adt,
+    array3 aStart_pose,
+    array3 aStart_twist)
+{
+    dt = adt;
+    bhxl = bxl * dt;
+    bhxr = bxr * dt;
+    bhyl = byl * dt;
+    bhyr = byr * dt;
+    bhol = bol * dt;
+    bhor = bor * dt;
+
+    alphax = 1.0 - qx * dt;
+    alphay = 1.0 - qy * dt;
+    alphao = 1.0 - qo * dt;
+
     start_pose = aStart_pose;
     start_twist = aStart_twist;
-    n = aLefts.size();
+    n = lefts.size();
     
     alphaxj = ArrayXd(n);
     alphayj = ArrayXd(n);
@@ -528,7 +549,7 @@ double Path::newton_raphson_step(double &loss, double &eps)
     //for (int i = 1; i < times.size()-1; ++i) {
     //    cout << times[i] - times[i-1] << ' ';
     //}
-    cout << "total time: " << times[times.size() - 1] << '\n';
+    //cout << "total time: " << times[times.size() - 1] << '\n';
 
     // line search over deltax looking for best eps
     auto base_lefts = lefts;
@@ -545,13 +566,13 @@ double Path::newton_raphson_step(double &loss, double &eps)
 
     double worst_eps = -1.0;
     if (slew > maxSlew) {
-        cout << "Limiting slew rate\n";
+        // cout << "Limiting slew rate\n";
         worst_eps = min(maxSlew / slew, 1.0);
         eps = min(worst_eps, eps);
     }
     bool allDone = false;
     for (int lcount = 0; ; lcount++) {
-        cout << " loss " << loss << " eps: " << last_eps << " best_eps: " << best_eps << '\n';
+        // cout << " loss " << loss << " eps: " << last_eps << " best_eps: " << best_eps << " worst_eps " << worst_eps << '\n';
         if ((lcount >= 12 ) or (lcount >= 4 and eps > 0.0)) {
             // last time
             allDone = true;
@@ -584,7 +605,7 @@ double Path::newton_raphson_step(double &loss, double &eps)
         if (worst_eps < 0.0) {
             eps *= 2;
         } else {
-            eps = min(1.0, 0.5 * (best_eps + worst_eps));
+            eps = min(1.5, 0.5 * (best_eps + worst_eps));
         }
     }
     return best_loss;

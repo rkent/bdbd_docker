@@ -1,7 +1,7 @@
 // Given left/right values and constraints, tweak left/right to optimize
 
 
-#include "lrPath.h"
+#include "libcpp/lrPath.h"
 
 #include <ros/ros.h>
 #include <ros/console.h>
@@ -39,10 +39,10 @@ public:
         bool success = true;
         start = chrono::steady_clock::now();
 
-        Path path(goal->dt);
+        Path path;
         const ArrayXd lefts = ArrayXd::Map(goal->start_lefts.data(), n);
         const ArrayXd rights = ArrayXd::Map(goal->start_rights.data(), n);
-        path.pose_init(lefts, rights, goal->start_pose, goal->start_twist);
+        path.pose_init(goal->dt, lefts, rights, goal->start_pose, goal->start_twist);
         path.loss_init(
             goal->target_pose
             , goal->target_twist
@@ -83,12 +83,12 @@ public:
             for (int i = 0; i < path.lefts.size(); ++i) {
                 result.lefts.push_back(path.lefts[i]);
                 result.rights.push_back(path.rights[i]);
-                result.pxs.push_back(path.pxj[i]);
-                result.pys.push_back(path.pyj[i]);
-                result.thetas.push_back(path.thetaj[i]);
-                result.vxs.push_back(path.vxj[i]);
-                result.vys.push_back(path.vyj[i]);
-                result.omegas.push_back(path.omegaj[i]);
+                result.pxj.push_back(path.pxj[i]);
+                result.pyj.push_back(path.pyj[i]);
+                result.thetaj.push_back(path.thetaj[i]);
+                result.vxj.push_back(path.vxj[i]);
+                result.vyj.push_back(path.vyj[i]);
+                result.omegaj.push_back(path.omegaj[i]);
             }
             action_server.setSucceeded(result);
             cout << "C++ action elapsed time " << dseconds(chrono::steady_clock::now() - start).count() << '\n';
@@ -110,12 +110,12 @@ void rawLRcallback(const bdbd_common::LeftRightsConstPtr& leftRights)
 
     const array3 start_pose {0.0, 0.0, 0.0};
     const array3 start_twist {0.0, 0.0, 0.0};
-    Path path(dt);
+    Path path;
  
     const ArrayXd lefts = ArrayXd::Map(msgLefts.data(), n);
     const ArrayXd rights = ArrayXd::Map(msgRights.data(), n);
 
-    path.pose_init(lefts, rights, start_pose, start_twist);
+    path.pose_init(dt, lefts, rights, start_pose, start_twist);
     const array3 target_pose = {0.2, 0.1, 180 * D_TO_R};
     const array3 target_twist = {0.0, 0.0, 0.0};
     const array2 target_lr = {0.0, 0.0};

@@ -57,6 +57,7 @@
   <depend>rospy</depend>
   <depend>std_msgs</depend>
   <depend>bdbd_common</depend>
+  <depend>nav_msgs</depend>
   <!--
   <build_depend>bdbd_common</build_depend>
   <exec_depend>bdbd_common</exec_depend>

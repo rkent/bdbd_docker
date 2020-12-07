@@ -5,6 +5,7 @@ project(bdbd_docker)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 add_compile_options(-std=c++11 -O3)
+#add_compile_options(-std=c++11)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -16,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
   bdbd_common
   actionlib_msgs
   actionlib
+  nav_msgs
 )
 
 ## System dependencies are found with CMake's conventions
@@ -110,7 +112,7 @@ catkin_python_setup()
 catkin_package(
    INCLUDE_DIRS
 #  LIBRARIES bdbd_docker
-   CATKIN_DEPENDS roscpp rospy std_msgs bdbd_common
+   CATKIN_DEPENDS roscpp rospy std_msgs nav_msgs bdbd_common
 #  DEPENDS system_lib
 )
 
@@ -141,10 +143,14 @@ include_directories(
 ## The recommended prefix ensures that target names across packages don't collide
 # add_executable(${PROJECT_NAME}_node src/bdbd_docker_node.cpp)
 add_executable(lrTweak
-    src/lrPath.cpp
+    src/libcpp/lrPath.cpp
     src/lrTweak.cpp
 )
 
+add_executable(dynamicPath
+    src/libcpp/lrPath.cpp
+    src/dynamicPath.cpp
+)
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
 ## target back to the shorter version for ease of user use
@@ -158,6 +164,12 @@ add_executable(lrTweak
 ## Specify libraries to link a library or executable target against
 target_link_libraries(
    lrTweak
+   ${catkin_LIBRARIES}
+)
+
+## Specify libraries to link a library or executable target against
+target_link_libraries(
+   dynamicPath
    ${catkin_LIBRARIES}
 )
 
