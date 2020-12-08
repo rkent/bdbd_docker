@@ -113,6 +113,14 @@ void Path::pose()
     for (int i = 1; i < n; i++) {
         pxj(i) = pxj(i-1) + dt * vxwj(i);
         pyj(i) = pyj(i-1) + dt * vywj(i);
+        /*
+        cout << "i, px, py, vx, vy "
+             << i << ' ' 
+             << pxj(i) << ' ' 
+             << pyj(i) << ' '
+             << vxwj(i) << ' '
+             << vywj(i) << '\n';
+        */
     }
 }
 
@@ -573,7 +581,7 @@ double Path::newton_raphson_step(double &loss, double &eps)
     bool allDone = false;
     for (int lcount = 0; ; lcount++) {
         // cout << " loss " << loss << " eps: " << last_eps << " best_eps: " << best_eps << " worst_eps " << worst_eps << '\n';
-        if ((lcount >= 12 ) or (lcount >= 4 and eps > 0.0)) {
+        if ((lcount >= 12 ) or (lcount >= 4 and best_eps > 0.0)) {
             // last time
             allDone = true;
             eps = best_eps;

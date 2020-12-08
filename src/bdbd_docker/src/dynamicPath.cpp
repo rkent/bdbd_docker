@@ -124,27 +124,27 @@ public:
         bool success = true;
         start = chrono::steady_clock::now();
 
-        array3 start_pose = {0.0, 0.0, 0.0};
+        array3 start_pose {0.0, 0.0, 0.0};
 
         const ArrayXd lefts = ArrayXd::Map(goal->start_lefts.data(), n);
         const ArrayXd rights = ArrayXd::Map(goal->start_rights.data(), n);
 
         // target is calculated relative to initial pose
+        array3 start_pose_map {odom->xa, odom->ya, odom->thetaa};
         array3 target_pose_map;
-        target_pose_map[0] = odom->xa + goal->target_pose[0] - goal->start_pose[0];
-        target_pose_map[1] = odom->ya + goal->target_pose[1] - goal->start_pose[1];
-        target_pose_map[2] = odom->thetaa + goal->target_pose[2] - goal->start_pose[2];
+        for (int i = 0; i < 3; ++i) {
+            target_pose_map[i] = start_pose_map[i]+ goal->target_pose[i] - goal->start_pose[i];
+        }
 
-        cout << "init time " << dseconds(chrono::steady_clock::now() - start).count() << '\n';
         // main loop
         bool allok = true;
         bool first_time = true;
-        ros::Rate rate(20);
+        ros::Rate rate(50);
         double dt {goal->dt};
         Path path;
         while (true) {
             auto start = chrono::steady_clock::now();
-    
+
             array3 target_pose;
             target_pose[0] = target_pose_map[0] - odom->xa;
             target_pose[1] = target_pose_map[1] - odom->ya;
@@ -165,15 +165,14 @@ public:
                 , goal->Wback
                 , goal->mmax);
 
-            if (first_time && goal->gaussItersMax > 0) {
-                path.pose_init(dt, lefts, rights, start_pose, goal->start_twist);
-                path.pose();
-
-                //ROS_INFO("%s: Doing gradient_descent iters %i", action_name.c_str(), goal->gaussItersMax);
+            if (first_time) {
                 first_time = false;
-                loss = path.gradient_descent(goal->gaussItersMax, 1.0);
-                loss = path.losses(false);
-                // cout << "gauss loss " << loss << " elapsed time " << dseconds(chrono::steady_clock::now() - start).count() << '\n';
+                path.pose_init(dt, lefts, rights, start_pose, goal->start_twist);
+                if (goal->gaussItersMax > 0) {
+                    //ROS_INFO("%s: Doing gradient_descent iters %i", action_name.c_str(), goal->gaussItersMax);
+                    loss = path.gradient_descent(goal->gaussItersMax, 1.0);
+                    cout << "gauss loss " << loss << " elapsed time " << dseconds(chrono::steady_clock::now() - start).count() << '\n';
+                }
             } else {
                 // Stretch dt if needed to keep motors in bounds
                 double max_motor = 0.0;
@@ -184,14 +183,14 @@ public:
                 if (max_motor > goal->mmax) {
                     dt *= (max_motor / goal->mmax);
                 }
-                cout << "max_motor " << max_motor << " dt " << dt << '\n';
+                // cout << "max_motor " << max_motor << " dt " << dt << '\n';
                 path.pose_init(dt, start_pose, goal->start_twist);
-                path.pose();
             }
+            path.pose();
 
             double eps = 1.0;
-            auto last_loss = loss;
-            for (int nrIters = 1; nrIters <= goal->nrItersMax; nrIters++) {
+            auto last_loss = path.losses(false);
+            for (int nrIters = 0; nrIters <= goal->nrItersMax; nrIters++) {
                 if (action_server.isPreemptRequested() || !ros::ok()) {
                     ROS_INFO("%s: Preempted", action_name.c_str());
                     action_server.setPreempted();
@@ -202,12 +201,13 @@ public:
                 loss = path.newton_raphson_step(loss, eps);
                 auto ratio = abs((last_loss - loss) / loss);
                 last_loss = loss;
-                // ROS_INFO("%s: nr iteration eps=%f loss=%f conv_ratio=%g", action_name.c_str(), eps, loss, ratio);
+                ROS_INFO("%s: nr iteration dt=%f eps=%f loss=%f conv_ratio=%g lefts[10]=%f", action_name.c_str(), dt, eps, loss, ratio, path.lefts[10]);
                 // cout << "elapsed time " << dseconds(chrono::steady_clock::now() - start).count() << '\n';
                 if (eps == 0.0 || ratio < converge_ratio) {
                     break;
                 }
             }
+
             if (allok) {
                 loss = path.losses(false);
                 // TODO: Insert test for done
@@ -228,6 +228,7 @@ public:
             } else {
                 break;
             }
+
             rate.sleep();
         }
         if (success) {
@@ -264,7 +265,7 @@ int main(int argc, char **argv)
     ros::Subscriber odometrySub = nh.subscribe("/t265/odom/sample", 10, &Odom::odometryCB, &odom);
 
     LrTweakAction lrTweakAction("dynamicPath", &odom);
-    ros::Timer timer = nh.createTimer(ros::Duration(1.0), &Odom::timerCB, &odom);
+    //ros::Timer timer = nh.createTimer(ros::Duration(1.0), &Odom::timerCB, &odom);
     ros::MultiThreadedSpinner spinner(4);
     spinner.spin();
 
