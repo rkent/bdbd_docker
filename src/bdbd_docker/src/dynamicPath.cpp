@@ -33,6 +33,42 @@ double amean(const double a1, const double a2, const double f) {
     return atan2(sina, cosa);
 }
 
+struct Lr {
+    double left;
+    double right;
+    Lr(): left{0.0}, right{0.0} {}
+};
+
+struct Lr_model {
+    double bxl;
+    double bxr;
+    double qx;
+    double byl;
+    double byr;
+    double qy;
+    double bol;
+    double bor;
+    double qo;
+    Lr_model():
+        bxl{1.258}, bxr{1.378}, qx{7.929},
+        byl{-0.677}, byr{0.657}, qy{5.650},
+        bol{-7.659}, bor{7.624}, qo{8.464}
+    {}
+};
+
+Lr lr_est(double vx, double omega, double last_vx, double last_omega, double dt) {
+    // estimate values for left, right using the dynamic model.
+    // See RKJ 2020-10-26 p 52
+    Lr_model LRM;
+    Lr lr;
+
+    auto delx = (vx - last_vx * (1.0 - dt * LRM.qx)) / dt;
+    auto delo = (omega - last_omega * (1. - dt * LRM.qo)) / dt;
+    lr.right = (LRM.bol * delx - LRM.bxl * delo) / (LRM.bol * LRM.bxr - LRM.bxl * LRM.bor);
+    lr.left = (delx - LRM.bxr * lr.right) / LRM.bxl;
+    return lr;
+}
+
 array3 transform2d(const array3 poseA, const array3 frameA, const array3 frameB)
 {
     // transform poseA from frameA to frameC.
@@ -184,6 +220,8 @@ public:
         array3 old_pose_map {odom->xa, odom->ya, odom->thetaa};
         double last_total_time{1.e10};
         float last_left{0.0}, last_right{0.0};
+        double last_vx{0.0}, last_omega{0.0};
+        double delta_left{0.0}, delta_right{0.0}, dd_left{0.0}, dd_right{0.0}, damp{0.2};
 
         // Main loop
         for (int step_count=0; step_count < MAX_STEPS; step_count++) {
@@ -195,6 +233,26 @@ public:
 
             double total_time = dt * (n - 1);
             if (!first_time) {
+
+                // Compare actual to predicted left, right
+                auto lr = lr_est(odom->vxa, odom->omegaa, last_vx, last_omega, dt);
+                delta_left = lr.left - last_left;
+                delta_right = lr.right - last_right;
+                dd_left = (1.-damp) * dd_left + damp * delta_left;
+                dd_right = (1.-damp) * dd_right + damp * delta_right;
+    
+                // Estimate resistance factor q
+                Lr_model lrm;
+                double qo_est_num = lrm.bol * last_left + lrm.bor * last_right
+                    - (odom->omegaa - last_omega) / dt;
+                double qo_est = odom->omegaa != 0.0 ? qo_est_num / odom->omegaa : 0.0;
+                cout << "\nlast left,right: (" << last_left << "," << last_right
+                    << ") predicted left,right: (" << lr.left << "," << lr.right << ")\n";
+                cout << "qo_est " << qo_est << " delta left,right: (" << delta_left << "," << delta_right
+                    << ") dd left,right: (" << dd_left << "," << dd_right << ")\n";
+                    
+                last_vx = odom->vxa;
+                last_omega = odom->omegaa;
 
                 // Stretch time if needed to keep motors in bounds
                 double max_motor = 0.0;
@@ -250,7 +308,7 @@ public:
                 double new_dt = total_time / (n - 1);
                 cout  << "new_dt " << new_dt 
                     << " total_time " << total_time 
-                    << " odom->vxa " << odom->vxa << " odom->vya " << odom->vya
+                    << " odom->vxa " << odom->vxa << " odom->vya " << odom->vya << " odom->omegaa " << odom->omegaa
                     << " xa " << now_pose_start[0] << " ya " << now_pose_start[1] << " thetaa " << now_pose_start[2]
                     << '\n';
 
@@ -323,7 +381,7 @@ public:
                 loss = path.newton_raphson_step(loss, eps);
                 auto ratio = abs((last_loss - loss) / loss);
                 last_loss = loss;
-                ROS_INFO("%s: nr iteration dt=%f eps=%f loss=%f ratio=%g", action_name.c_str(), dt, eps, loss, ratio);
+                // ROS_INFO("%s: nr iteration dt=%f eps=%f loss=%f ratio=%g", action_name.c_str(), dt, eps, loss, ratio);
                 // cout << "elapsed time " << dseconds(chrono::steady_clock::now() - start).count() << '\n';
                 if (eps == 0.0 || ratio < converge_ratio) {
                     break;
