@@ -20,10 +20,10 @@ using namespace Eigen;
 
 // parameters
 const double trouble_loss{1.0}; // this means we have lost convergence
-const int MAX_STEPS{1000};
-double const corr_radius = 0.10; // used to determine effective distance to a point with a theta error
+const int MAX_STEPS{1000}; // mostly used in debugging to stop at a certain point
+const double corr_radius = 0.10; // used to determine effective distance to a point with a theta error
+const double converge_ratio{1.e-4}; // when to stop nr iterations
 
-// const double D_TO_R = 3.1415926535 / 180.; // defined in lrPath.h
 const array3 zero3{0.0, 0.0, 0.0};
 
 double amean(const double a1, const double a2, const double f) {
@@ -31,42 +31,6 @@ double amean(const double a1, const double a2, const double f) {
     double sina = (1. - f) * sin(a1) + f * sin(a2);
     double cosa = (1. - f) * cos(a1) + f * cos(a2);
     return atan2(sina, cosa);
-}
-
-struct Lr {
-    double left;
-    double right;
-    Lr(): left{0.0}, right{0.0} {}
-};
-
-struct Lr_model {
-    double bxl;
-    double bxr;
-    double qx;
-    double byl;
-    double byr;
-    double qy;
-    double bol;
-    double bor;
-    double qo;
-    Lr_model():
-        bxl{1.258}, bxr{1.378}, qx{7.929},
-        byl{-0.677}, byr{0.657}, qy{5.650},
-        bol{-7.659}, bor{7.624}, qo{8.464}
-    {}
-};
-
-Lr lr_est(double vx, double omega, double last_vx, double last_omega, double dt) {
-    // estimate values for left, right using the dynamic model.
-    // See RKJ 2020-10-26 p 52
-    Lr_model LRM;
-    Lr lr;
-
-    auto delx = (vx - last_vx * (1.0 - dt * LRM.qx)) / dt;
-    auto delo = (omega - last_omega * (1. - dt * LRM.qo)) / dt;
-    lr.right = (LRM.bol * delx - LRM.bxl * delo) / (LRM.bol * LRM.bxr - LRM.bxl * LRM.bor);
-    lr.left = (delx - LRM.bxr * lr.right) / LRM.bxl;
-    return lr;
 }
 
 array3 transform2d(const array3 poseA, const array3 frameA, const array3 frameB)
@@ -149,6 +113,8 @@ public:
         }
     }
 
+    // not used but kept as example
+    /*
     void timerCB(const ros::TimerEvent& event)
     {
         cout 
@@ -156,32 +122,27 @@ public:
             << " vx " << vxa << " vy " << vya << " omega " << omegaa
             << '\n';
     }
+    */
 
 };
 
 class LrTweakAction {
+
 protected:
     using dseconds = std::chrono::duration<double>;
-    chrono::steady_clock::time_point start;
-
+    Odom *odom;
     ros::NodeHandle nh;
     actionlib::SimpleActionServer<bdbd_common::LrOptimizeAction> action_server;
     string action_name;
-    // starting position in map coordinates
-    double pxm_start, pxy_start, thetam_start;
-    // convergence parameter
-    double converge_ratio;
-    Odom *odom;
-    ros::Publisher feedback_pub;
+    ros::Publisher feedsub_pub;
     ros::Publisher motors_pub;
 
 public:
-    LrTweakAction(string name, Odom* aodom):
-        action_server(nh, "/bdbd/lrTweak", boost::bind(&LrTweakAction::executeCB, this, _1), false),
-        action_name(name),
-        converge_ratio(1.e-4),
+    LrTweakAction(Odom* aodom):
         odom(aodom),
-        feedback_pub(nh.advertise<bdbd_common::LrResult>("dynamicPath/feedback", 1)),
+        action_server(nh, "/bdbd/dynamicPath", boost::bind(&LrTweakAction::executeCB, this, _1), false),
+        action_name{"dynamicPath"},
+        feedsub_pub(nh.advertise<bdbd_common::LrResult>("/bdbd/dynamicPath/feedsub", 1)),
         motors_pub(nh.advertise<bdbd_common::MotorsRaw>("/bdbd/motors/cmd_raw", 1))
     {
         action_server.start();
@@ -192,16 +153,13 @@ public:
 
     void executeCB(const bdbd_common::LrOptimizeGoalConstPtr &goal)
     {
+        // This would typically be run in a separate thread
         ROS_INFO("%s: Executing with rate %i", action_name.c_str(), goal->rate);
-        using dseconds = std::chrono::duration<double>;
-        pxm_start = odom->xa;
-        pxy_start = odom->ya;
-        thetam_start = odom->thetaa;
-        auto n = goal->start_lefts.size();
+        //ros::Timer timer = nh.createTimer(ros::Duration(1.0), &Odom::timerCB, &odom);
+
+        const int n = goal->start_lefts.size();
         double loss = 0.0;
         bool success = true;
-        start = chrono::steady_clock::now();
-
         array3 start_pose {0.0, 0.0, 0.0};
 
         const ArrayXd lefts = ArrayXd::Map(goal->start_lefts.data(), n);
@@ -215,47 +173,22 @@ public:
         bool first_time = true;
         ros::Rate rate(goal->rate);
         double dt {goal->dt};
-        double callback_dt = 1.0 / double(goal->rate);
+        const double callback_dt = 1.0 / double(goal->rate);
         Path path;
         array3 old_pose_map {odom->xa, odom->ya, odom->thetaa};
-        double last_total_time{1.e10};
-        float last_left{0.0}, last_right{0.0};
-        double last_vx{0.0}, last_omega{0.0};
-        double delta_left{0.0}, delta_right{0.0}, dd_left{0.0}, dd_right{0.0}, damp{0.2};
 
         // Main loop
-        for (int step_count=0; step_count < MAX_STEPS; step_count++) {
+        for (int step_count = 0; step_count < MAX_STEPS; step_count++) {
             auto start = chrono::steady_clock::now();
 
             now_pose_map = {odom->xa, odom->ya, odom->thetaa};
             array3 now_twist_robot {odom->vxa, odom->vya, odom->omegaa};
             auto now_pose_start = transform2d(now_pose_map, zero3, start_pose_map);
-
             double total_time = dt * (n - 1);
+
             if (!first_time) {
-
-                // Compare actual to predicted left, right
-                auto lr = lr_est(odom->vxa, odom->omegaa, last_vx, last_omega, dt);
-                delta_left = lr.left - last_left;
-                delta_right = lr.right - last_right;
-                dd_left = (1.-damp) * dd_left + damp * delta_left;
-                dd_right = (1.-damp) * dd_right + damp * delta_right;
-    
-                // Estimate resistance factor q
-                Lr_model lrm;
-                double qo_est_num = lrm.bol * last_left + lrm.bor * last_right
-                    - (odom->omegaa - last_omega) / dt;
-                double qo_est = odom->omegaa != 0.0 ? qo_est_num / odom->omegaa : 0.0;
-                cout << "\nlast left,right: (" << last_left << "," << last_right
-                    << ") predicted left,right: (" << lr.left << "," << lr.right << ")\n";
-                cout << "qo_est " << qo_est << " delta left,right: (" << delta_left << "," << delta_right
-                    << ") dd left,right: (" << dd_left << "," << dd_right << ")\n";
-                    
-                last_vx = odom->vxa;
-                last_omega = odom->omegaa;
-
                 // Stretch time if needed to keep motors in bounds
-                double max_motor = 0.0;
+                double max_motor{0.0};
                 double progress_dt{0.0};
                 for (int i = 1; i < n; i++) {
                     max_motor = max(max_motor, abs(path.lefts[i]));
@@ -263,57 +196,48 @@ public:
                 }
                 if (max_motor > goal->mmax) {
                     total_time *= (max_motor / goal->mmax);
-                } else {
-                    // calculate progress toward the previous goal. We'll find an interpolated minimum
-                    // using the formula on RKJ 2020-10-21 pp 50
-
-                    array3 now_pose_old = transform2d(now_pose_map, zero3, old_pose_map);
-                    double last_distance_sq{0.0};
-                    double d0{0.0}, d1{0.0}, d2{0.0};
-                    // move forward until distance starts increasing
-                    int i = 0;
-                    for (; i < n; i++) {
-                        double dx2 = pow(now_pose_old[0] - path.pxj[i], 2);
-                        double dy2 = pow(now_pose_old[1] - path.pyj[i], 2);
-                        double dtheta2 = pow(corr_radius * (1.0 - cos(now_pose_old[2] - path.thetaj[i])), 2);
-                        double distance_sq = dx2 + dy2 + dtheta2;
-                        // Adjust for theta error using RKJ notebook 2020-12-7
-                        distance_sq += pow(corr_radius * (1.0 - cos(now_pose_old[2] - path.thetaj[i])), 2);
-                        d0 = d1;
-                        d1 = d2;
-                        d2 = distance_sq;
-                        if (distance_sq > last_distance_sq && i >= 2) {
-                            break;
-                        }
-                        last_distance_sq = distance_sq;
-                    }
-                    double closest_i;
-                    double denom = 2. * (d0 + d2 - 2*d1);
-                    if (denom == 0.0) {
-                        closest_i = i-1;
-                    } else {
-                        closest_i = (i-2) + (3.*d0 + d2 - 4.*d1) / denom;
-                    }
-                    closest_i = min((double)i, max((double)(i-2), closest_i));
-                    progress_dt = max(0.0, dt * closest_i);
-
-                    // shrink time to move forward by progress, reducing modeling time. Ensure some forward progress.
-                    total_time -= max(callback_dt/2, progress_dt);
-                    cout
-                        << "progress_dt " << progress_dt
-                        << " closest_i " << closest_i
-                        << '\n';
                 }
+                // calculate progress toward the previous goal. We'll find an interpolated minimum
+                // using the formula on RKJ 2020-10-21 pp 50
 
+                array3 now_pose_old = transform2d(now_pose_map, zero3, old_pose_map);
+                double last_distance_sq{0.0};
+                double d0{0.0}, d1{0.0}, d2{0.0};
+                // move forward until distance starts increasing
+                int i = 0;
+                for (; i < n; i++) {
+                    double dx2 = pow(now_pose_old[0] - path.pxj[i], 2);
+                    double dy2 = pow(now_pose_old[1] - path.pyj[i], 2);
+                    // Adjust for theta error using RKJ notebook 2020-12-7
+                    double dtheta2 = pow(corr_radius * (1.0 - cos(now_pose_old[2] - path.thetaj[i])), 2);
+                    double distance_sq = dx2 + dy2 + dtheta2;
+                    d0 = d1;
+                    d1 = d2;
+                    d2 = distance_sq;
+                    if (distance_sq > last_distance_sq && i >= 2) {
+                        break;
+                    }
+                    last_distance_sq = distance_sq;
+                }
+                double closest_i;
+                double denom = 2. * (d0 + d2 - 2*d1);
+                if (denom == 0.0) {
+                    closest_i = i-1;
+                } else {
+                    closest_i = (i-2) + (3.*d0 + d2 - 4.*d1) / denom;
+                }
+                closest_i = min((double)i, max((double)(i-2), closest_i));
+                // shrink time to move forward by progress, reducing modeling time. Ensure some forward progress.
+                progress_dt = max(callback_dt/2, dt * closest_i);
+
+                total_time -= progress_dt;
+                if (total_time < callback_dt) {
+                    break;
+                }
                 double new_dt = total_time / (n - 1);
-                cout  << "new_dt " << new_dt 
-                    << " total_time " << total_time 
-                    << " odom->vxa " << odom->vxa << " odom->vya " << odom->vya << " odom->omegaa " << odom->omegaa
-                    << " xa " << now_pose_start[0] << " ya " << now_pose_start[1] << " thetaa " << now_pose_start[2]
-                    << '\n';
 
                 // Interpolate left, rights to get update values
-                Eigen::ArrayXd new_lefts(n), new_rights(n);
+                ArrayXd new_lefts(n), new_rights(n);
                 double tt{progress_dt};
                 for (int new_i = 0; new_i < n; ++new_i) {
                     int old_i = trunc(tt / dt);
@@ -337,23 +261,11 @@ public:
 
                 // cout << "max_motor " << max_motor << " dt " << dt << '\n';
                 path.pose_init(dt, start_pose, now_twist_robot);
-                path.lefts[0] = last_left;
-                path.rights[0] = last_right;
 
-            }
-            last_total_time = total_time;
-            if (total_time < callback_dt) {
-                break;
             }
             old_pose_map = now_pose_map;
-            array3 target_pose = transform2d(target_pose_map, zero3, now_pose_map);
-            /*
-            for (int i = 0; i < 3; i++) {
-                cout << " target_pose[" << i << "] " << target_pose[i];
-            }
-            cout  << '\n';
-            */
 
+            array3 target_pose = transform2d(target_pose_map, zero3, now_pose_map);
             path.loss_init(
                 target_pose
                 , goal->target_twist
@@ -363,20 +275,21 @@ public:
                 , goal->Wback
                 , goal->mmax);
 
+            double last_loss;
             if (first_time) {
                 first_time = false;
                 path.pose_init(dt, lefts, rights, start_pose, goal->start_twist);
                 if (goal->gaussItersMax > 0) {
-                    //ROS_INFO("%s: Doing gradient_descent iters %i", action_name.c_str(), goal->gaussItersMax);
-                    loss = path.gradient_descent(goal->gaussItersMax, 1.0);
-                    cout << "gauss loss " << loss << " dt " << dt << " elapsed time " << dseconds(chrono::steady_clock::now() - start).count() << '\n';
+                    last_loss = path.gradient_descent(goal->gaussItersMax, 1.0);
+                    ROS_INFO("%s: Did gradient_descent iters %i loss %f", action_name.c_str(), goal->gaussItersMax, last_loss);
                 }
+            } else {
+                path.pose();
+                last_loss = path.losses(false);
             }
-            path.pose();
 
             // Main Newton-Raphson iteration
             double eps = 1.0;
-            auto last_loss = path.losses(false);
             for (int nrIters = 0; nrIters <= goal->nrItersMax; nrIters++) {
                 loss = path.newton_raphson_step(loss, eps);
                 auto ratio = abs((last_loss - loss) / loss);
@@ -395,7 +308,7 @@ public:
                 || loss > trouble_loss)
             {
                 if (isnan(loss) || loss > trouble_loss) {
-                    ROS_WARN("Excessive loss, path convergence failed");
+                    ROS_WARN("%s Excessive loss, path convergence failed", action_name.c_str());
                 } else {
                     ROS_INFO("%s: Preempted", action_name.c_str());
                 }
@@ -413,25 +326,20 @@ public:
                 double interval_dt = tt + dt < forward_time ? dt : forward_time - tt;
                 left_sum += (path.lefts[i-1] + path.lefts[i]) * interval_dt;
                 right_sum += (path.rights[i-1] + path.rights[i]) * interval_dt;
-                // cout << "interval_dt " << interval_dt << " left_sum " << left_sum << '\n';
             }
             float new_left = 0.5 * left_sum / forward_time;
             float new_right = 0.5 * right_sum / forward_time;
-            ROS_INFO("%s: loss %f Set motors (%f,%f)", action_name.c_str(), loss, new_left, new_right);
-            // cout << "new_left " << new_left << " new_right " << new_right << " callback_dt " << callback_dt << '\n';
             bdbd_common::MotorsRaw motors;
             motors.left = new_left;
             motors.right = new_right;
             motors_pub.publish(motors);
-            last_left = new_left;
-            last_right = new_right;
 
             loss = path.losses(false);
             bdbd_common::LrResult feedback;
             feedback.loss = loss;
+            feedback.dt = dt;
+            feedback.now_pose_map = now_pose_map;
             for (int i = 0; i < n; ++i) {
-                feedback.dt = dt;
-                feedback.now_pose_map = now_pose_map;
                 feedback.lefts.push_back(path.lefts[i]);
                 feedback.rights.push_back(path.rights[i]);
                 feedback.pxj.push_back(path.pxj[i]);
@@ -441,7 +349,7 @@ public:
                 feedback.vyj.push_back(path.vyj[i]);
                 feedback.omegaj.push_back(path.omegaj[i]);
             }
-            feedback_pub.publish(feedback);
+            feedsub_pub.publish(feedback);
 
             rate.sleep();
         }
@@ -456,8 +364,8 @@ public:
             bdbd_common::LrOptimizeResult result;
             result.loss = loss;
             result.now_pose_map = now_pose_map;
+            result.dt = dt;
             for (int i = 0; i < n; ++i) {
-                result.dt = dt;
                 result.lefts.push_back(path.lefts[i]);
                 result.rights.push_back(path.rights[i]);
                 result.pxj.push_back(path.pxj[i]);
@@ -470,21 +378,20 @@ public:
             action_server.setSucceeded(result);
         }
     }
-
 };
 
 int main(int argc, char **argv)
 {
     cout.setf(std::ios::unitbuf);
     ros::init(argc, argv, "dynamicPath");
-    ROS_INFO("dynamicPath starting up");
     ros::NodeHandle nh;
+    ROS_INFO("dynamicPath starting up");
+
     Odom odom;
     ros::Subscriber odometrySub = nh.subscribe("/t265/odom/sample", 10, &Odom::odometryCB, &odom);
 
-    LrTweakAction lrTweakAction("dynamicPath", &odom);
-    //ros::Timer timer = nh.createTimer(ros::Duration(1.0), &Odom::timerCB, &odom);
-    ros::MultiThreadedSpinner spinner(4);
+    LrTweakAction lrTweakAction(&odom);
+    ros::MultiThreadedSpinner spinner(2);
     spinner.spin();
 
     return(0);

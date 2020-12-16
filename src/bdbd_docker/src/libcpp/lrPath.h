@@ -17,25 +17,30 @@ const double D_TO_R = pi/180.;
 typedef boost::array<double, 3> array3;
 typedef boost::array<double, 2> array2;
 
+struct Lr_model {
+    double bxl;
+    double bxr;
+    double qx;
+    double byl;
+    double byr;
+    double qy;
+    double bol;
+    double bor;
+    double qo;
+    Lr_model():
+        bxl{1.258}, bxr{1.378}, qx{7.929},
+        byl{-0.677}, byr{0.657}, qy{5.650},
+        bol{-7.659}, bor{7.624}, qo{8.464}
+    {}
+};
+
 class Path
 {
 public:
     // class variables
 
     // dynamic model
-    const double
-        // vx model
-        bxl = 1.258,
-        bxr = 1.378,
-        qx = 7.929,
-        // vy model
-        byl = -.677,
-        byr = .657,
-        qy = 5.650,
-        // omega model
-        bol = -7.659,
-        bor = 7.624,
-        qo = 8.464;
+    const Lr_model LRM;
 
     double bhxl, bhxr, bhyl, bhyr, bhol, bhor;
     double alphax, alphay, alphao;

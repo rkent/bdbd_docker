@@ -22,16 +22,16 @@ void Path::pose_init(
     array3 aStart_twist)
 {
     dt = adt;
-    bhxl = bxl * dt;
-    bhxr = bxr * dt;
-    bhyl = byl * dt;
-    bhyr = byr * dt;
-    bhol = bol * dt;
-    bhor = bor * dt;
+    bhxl = LRM.bxl * dt;
+    bhxr = LRM.bxr * dt;
+    bhyl = LRM.byl * dt;
+    bhyr = LRM.byr * dt;
+    bhol = LRM.bol * dt;
+    bhor = LRM.bor * dt;
 
-    alphax = 1.0 - qx * dt;
-    alphay = 1.0 - qy * dt;
-    alphao = 1.0 - qo * dt;
+    alphax = 1.0 - LRM.qx * dt;
+    alphay = 1.0 - LRM.qy * dt;
+    alphao = 1.0 - LRM.qo * dt;
 
     start_pose = aStart_pose;
     start_twist = aStart_twist;
