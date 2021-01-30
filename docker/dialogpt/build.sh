@@ -7,5 +7,5 @@ NAME=$(basename $DIRNAME)
 source "$DIRNAME/../config.sh"
 
 docker build \
-  -t "${BASE_NAME}/$NAME:${TRANSFORMERS_VERSION}-${OS}" -t "${BASE_NAME}/$NAME:latest" \
+  -t "${BASE_NAME}/$NAME:${TRANSFORMERS_VERSION}-${OS}" -t "${BASE_NAME}/$NAME:latest" $1\
   $DIRNAME

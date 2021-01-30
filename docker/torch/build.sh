@@ -8,5 +8,5 @@ source "$DIRNAME/../config.sh"
 
 docker build \
   -t "${BASE_NAME}/$NAME:${TORCH_VERSION}-${OS}" -t "${BASE_NAME}/$NAME:latest" \
-  --build-arg TORCH_VERSION=$TORCH_VERSION \
+  --build-arg TORCH_VERSION=$TORCH_VERSION $1\
   $DIRNAME

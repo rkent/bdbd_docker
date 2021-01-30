@@ -10,5 +10,5 @@ docker build \
   -t "${BASE_NAME}/$NAME:${TF_VERSION}-${OS}" -t "${BASE_NAME}/$NAME:latest" \
   --build-arg TF_VERSION=$TF_VERSION \
   --build-arg OS=$OS \
-  --build-arg ROS_VERSION=$ROS_VERSION \
+  --build-arg ROS_VERSION=$ROS_VERSION $1\
   $DIRNAME

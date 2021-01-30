@@ -9,7 +9,7 @@
 #include <tf/transform_datatypes.h>
 #include "bdbd_common/LeftRights.h"
 #include "bdbd_common/LrOptimizeAction.h"
-#include "bdbd_common/LrResult.h"
+#include "bdbd_common/LrResults.h"
 #include "bdbd_common/MotorsRaw.h"
 #include <cmath>
 #include <atomic>
@@ -81,7 +81,7 @@ public:
         vxa = 0.0;
         vya = 0.0;
         omegaa = 0.0;
-        new_factor = 0.1;
+        new_factor = 0.25;
         first_call = true;
     }
 
@@ -114,7 +114,7 @@ public:
     }
 
     // not used but kept as example
-    /*
+    /* */
     void timerCB(const ros::TimerEvent& event)
     {
         cout 
@@ -122,7 +122,7 @@ public:
             << " vx " << vxa << " vy " << vya << " omega " << omegaa
             << '\n';
     }
-    */
+    /* */
 
 };
 
@@ -142,7 +142,7 @@ public:
         odom(aodom),
         action_server(nh, "/bdbd/dynamicPath", boost::bind(&LrTweakAction::executeCB, this, _1), false),
         action_name{"dynamicPath"},
-        feedsub_pub(nh.advertise<bdbd_common::LrResult>("/bdbd/dynamicPath/feedsub", 1)),
+        feedsub_pub(nh.advertise<bdbd_common::LrResults>("/bdbd/dynamicPath/feedsub", 1)),
         motors_pub(nh.advertise<bdbd_common::MotorsRaw>("/bdbd/motors/cmd_raw", 1))
     {
         action_server.start();
@@ -155,7 +155,6 @@ public:
     {
         // This would typically be run in a separate thread
         ROS_INFO("%s: Executing with rate %i", action_name.c_str(), goal->rate);
-        //ros::Timer timer = nh.createTimer(ros::Duration(1.0), &Odom::timerCB, &odom);
 
         const int n = goal->start_lefts.size();
         double loss = 0.0;
@@ -176,6 +175,7 @@ public:
         const double callback_dt = 1.0 / double(goal->rate);
         Path path;
         array3 old_pose_map {odom->xa, odom->ya, odom->thetaa};
+        array3 now_pose_start;
 
         // Main loop
         for (int step_count = 0; step_count < MAX_STEPS; step_count++) {
@@ -183,7 +183,7 @@ public:
 
             now_pose_map = {odom->xa, odom->ya, odom->thetaa};
             array3 now_twist_robot {odom->vxa, odom->vya, odom->omegaa};
-            auto now_pose_start = transform2d(now_pose_map, zero3, start_pose_map);
+            now_pose_start = transform2d(now_pose_map, zero3, start_pose_map);
             double total_time = dt * (n - 1);
 
             if (!first_time) {
@@ -201,7 +201,7 @@ public:
                 // using the formula on RKJ 2020-10-21 pp 50
 
                 array3 now_pose_old = transform2d(now_pose_map, zero3, old_pose_map);
-                double last_distance_sq{0.0};
+                double last_distance_sq{1.e10};
                 double d0{0.0}, d1{0.0}, d2{0.0};
                 // move forward until distance starts increasing
                 int i = 0;
@@ -228,13 +228,13 @@ public:
                 }
                 closest_i = min((double)i, max((double)(i-2), closest_i));
                 // shrink time to move forward by progress, reducing modeling time. Ensure some forward progress.
-                progress_dt = max(callback_dt/2, dt * closest_i);
+                progress_dt = max(callback_dt/4, dt * closest_i);
 
                 total_time -= progress_dt;
                 if (total_time < callback_dt) {
                     break;
                 }
-                double new_dt = total_time / (n - 1);
+                double new_dt = min(1.05 * dt, total_time / (n - 1));
 
                 // Interpolate left, rights to get update values
                 ArrayXd new_lefts(n), new_rights(n);
@@ -282,10 +282,10 @@ public:
                 if (goal->gaussItersMax > 0) {
                     last_loss = path.gradient_descent(goal->gaussItersMax, 1.0);
                     ROS_INFO("%s: Did gradient_descent iters %i loss %f", action_name.c_str(), goal->gaussItersMax, last_loss);
+                } else {
+                    path.pose();
+                    last_loss = path.losses(false);
                 }
-            } else {
-                path.pose();
-                last_loss = path.losses(false);
             }
 
             // Main Newton-Raphson iteration
@@ -294,7 +294,7 @@ public:
                 loss = path.newton_raphson_step(loss, eps);
                 auto ratio = abs((last_loss - loss) / loss);
                 last_loss = loss;
-                // ROS_INFO("%s: nr iteration dt=%f eps=%f loss=%f ratio=%g", action_name.c_str(), dt, eps, loss, ratio);
+                ROS_INFO("%s: nr iteration dt=%f eps=%f loss=%f ratio=%g", action_name.c_str(), dt, eps, loss, ratio);
                 // cout << "elapsed time " << dseconds(chrono::steady_clock::now() - start).count() << '\n';
                 if (eps == 0.0 || ratio < converge_ratio) {
                     break;
@@ -309,10 +309,11 @@ public:
             {
                 if (isnan(loss) || loss > trouble_loss) {
                     ROS_WARN("%s Excessive loss, path convergence failed", action_name.c_str());
+                    action_server.setAborted();
                 } else {
                     ROS_INFO("%s: Preempted", action_name.c_str());
+                    action_server.setPreempted();
                 }
-                action_server.setPreempted();
                 success = false;
                 break;
             }
@@ -320,7 +321,7 @@ public:
             // Normal end of time interval processing
 
             // set left, right as average over interval callback_dt
-            const double forward_time = callback_dt + 0.01;
+            const double forward_time = callback_dt + 0.05;
             double left_sum{0.0}, right_sum{0.0}, tt{0.0};
             for (int i = 1; i < n && tt < forward_time; ++i, tt += dt) {
                 double interval_dt = tt + dt < forward_time ? dt : forward_time - tt;
@@ -335,10 +336,11 @@ public:
             motors_pub.publish(motors);
 
             loss = path.losses(false);
-            bdbd_common::LrResult feedback;
+            bdbd_common::LrResults feedback;
             feedback.loss = loss;
             feedback.dt = dt;
             feedback.now_pose_map = now_pose_map;
+            feedback.now_pose_start = now_pose_start;
             for (int i = 0; i < n; ++i) {
                 feedback.lefts.push_back(path.lefts[i]);
                 feedback.rights.push_back(path.rights[i]);
@@ -364,6 +366,7 @@ public:
             bdbd_common::LrOptimizeResult result;
             result.loss = loss;
             result.now_pose_map = now_pose_map;
+            result.now_pose_start = now_pose_start;
             result.dt = dt;
             for (int i = 0; i < n; ++i) {
                 result.lefts.push_back(path.lefts[i]);
@@ -389,9 +392,10 @@ int main(int argc, char **argv)
 
     Odom odom;
     ros::Subscriber odometrySub = nh.subscribe("/t265/odom/sample", 10, &Odom::odometryCB, &odom);
+    // ros::Timer timer = nh.createTimer(ros::Duration(0.05), &Odom::timerCB, &odom);
 
     LrTweakAction lrTweakAction(&odom);
-    ros::MultiThreadedSpinner spinner(2);
+    ros::MultiThreadedSpinner spinner(4);
     spinner.spin();
 
     return(0);
