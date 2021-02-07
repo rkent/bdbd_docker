@@ -2,6 +2,8 @@
 
 # build all docker images in the correct order
 
+#cuda/build.sh $1
+set -e
 cuda/build.sh $1
 ros/build.sh $1
 tensorflow/build.sh $1

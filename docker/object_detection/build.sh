@@ -7,9 +7,7 @@ NAME=$(basename $DIRNAME)
 source "$DIRNAME/../config.sh"
 
 docker build \
-  -t "${BASE_NAME}/$NAME:${TORCH_VERSION}-${OS}" -t "${BASE_NAME}/$NAME:latest" \
-  --build-arg TORCH_VERSION=$TORCH_VERSION \
-  --build-arg TORCHVISION_VERSION=$TORCHVISION_VERSION \
-  --build-arg TORCHAUDIO_VERSION=$TORCHAUDIO_VERSION \
-  --build-arg CUNNN=$CUNNN \
+  -t "${BASE_NAME}/$NAME:${TF_MODELS_VERSION}-${OS}" -t "${BASE_NAME}/$NAME:latest" \
+  --build-arg TF_MODELS_VERSION=$TF_MODELS_VERSION \
+  --build-arg TF_MODELS_GIT=$TF_MODELS_GIT \
   $1 $DIRNAME

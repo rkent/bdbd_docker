@@ -1,4 +1,11 @@
 FROM bdbd/tensorflow:latest as base
 
-ARG TORCH_VERSION="1.6.0"
-RUN pip install torch==${TORCH_VERSION}+cu101 torchvision==0.7.0+cu101 -f https://download.pytorch.org/whl/torch_stable.html
+ARG TORCH_VERSION
+ARG TORCHVISION_VERSION
+ARG TORCHAUDIO_VERSION
+ARG CUNNN
+RUN pip install \
+    torch==${TORCH_VERSION}+${CUNNN} \
+    torchvision==${TORCHVISION_VERSION}+${CUNNN} \
+    torchaudio==${TORCHAUDIO_VERSION} \
+    -f https://download.pytorch.org/whl/torch_stable.html
