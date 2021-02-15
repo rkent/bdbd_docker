@@ -31,4 +31,10 @@ RUN cp object_detection/packages/tf2/setup.py ./
 RUN python -m pip install .
 ENV PATH="/home/bdbd/.local/bin:${PATH}"
 
+# additional dependencies of object_detect
+RUN apt-get install -y \
+    ros-noetic-cv-bridge
 ENV TF_CPP_MIN_LOG_LEVEL 3
+
+# should not be needed, but testing
+CMD ["/opt/app/rosrun.sh"]

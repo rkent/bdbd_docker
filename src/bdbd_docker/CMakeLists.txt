@@ -186,6 +186,7 @@ catkin_install_python(PROGRAMS
   nodes/dockers
   nodes/hello
   nodes/dialogpt
+  nodes/object_detect
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
