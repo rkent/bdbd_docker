@@ -37,4 +37,4 @@ RUN apt-get install -y \
 ENV TF_CPP_MIN_LOG_LEVEL 3
 
 # should not be needed, but testing
-CMD ["/opt/app/rosrun.sh"]
+#CMD ["/opt/app/rosrun.sh"]
