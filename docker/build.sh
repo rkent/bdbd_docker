@@ -10,3 +10,4 @@ tensorflow/build.sh $1
 torch/build.sh $1
 transformers/build.sh $1
 dialogpt/build.sh $1
+t265rect/build.sh $1
