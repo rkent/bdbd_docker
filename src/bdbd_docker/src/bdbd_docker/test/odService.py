@@ -28,7 +28,7 @@ model = Xception(weights = 'imagenet')
 #CAMERA = '/sr305/color/image_raw/compressed'
 #CAMERA = '/sr305/infra1/image_rect_raw/compressed'
 #CAMERA = '/t265/fisheye1/image_raw/compressed'
-CAMERA = '/t265/fisheye1/image_rect/compressed'
+CAMERA = '/t265/fisheye1/image_raw/compressed'
 
 OBJECT_COUNT = 12 # number of objects to attempt to classify
 REPORT_COUNT = 9 # number of objects to report
