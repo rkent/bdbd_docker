@@ -1,14 +1,10 @@
-from numpy.core.fromnumeric import resize
 import rospy
 from bdbd_common.srv import ObjectDetect, ObjectDetectRequest, ObjectDetectResponse
 from bdbd_common.utils import fstr, sstr
-from bdbd_common.messageSingle import messageSingle
 from bdbd_docker.libpy.objectClassifier import ObjectClassifier
 from sensor_msgs.msg import CompressedImage, CameraInfo
 from cv_bridge import CvBridge
 from rospy import ServiceException
-import cv2
-import time
 import os
 #os.environ["CUDA_VISIBLE_DEVICES"] = "-1"   # disable GPU
 
