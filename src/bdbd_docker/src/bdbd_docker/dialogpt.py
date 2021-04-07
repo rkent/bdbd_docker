@@ -26,7 +26,8 @@ class DialoGPT():
         rospy.loginfo(name + ' starting')
         self.queue = Queue()
         self.tokenizer = AutoTokenizer.from_pretrained("microsoft/DialoGPT-medium")
-        self.model = AutoModelWithLMHead.from_pretrained("microsoft/DialoGPT-medium").cuda()
+        #self.model = AutoModelWithLMHead.from_pretrained("microsoft/DialoGPT-medium").cuda()
+        self.model = AutoModelWithLMHead.from_pretrained("microsoft/DialoGPT-medium")
         self.idses = []
         rospy.loginfo(name + ' done with init')
         rospy.Service('/bdbd/dialog', Dialog, self.on_service_call)
@@ -59,7 +60,8 @@ class DialoGPT():
                         rospy.loginfo('Dialog options: {}'.format(req.options))
                     
                     # encode the new user input, add the eos_token and return a tensor in Pytorch
-                    new_user_input_ids = self.tokenizer.encode(req.text + self.tokenizer.eos_token, return_tensors='pt').cuda()
+                    #new_user_input_ids = self.tokenizer.encode(req.text + self.tokenizer.eos_token, return_tensors='pt').cuda()
+                    new_user_input_ids = self.tokenizer.encode(req.text + self.tokenizer.eos_token, return_tensors='pt')
                     self.idses.append(new_user_input_ids)
 
                     # assemble the chat history, limiting context size

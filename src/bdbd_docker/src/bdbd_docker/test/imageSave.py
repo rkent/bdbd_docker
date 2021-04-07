@@ -6,8 +6,8 @@ from bdbd_common.messageSingle import messageSingle
 from cv_bridge import CvBridge
 import rospy
 
-TOPIC = '/t265/fisheye1/image_raw/compressed'
-FILE = 'fisheye.jpg'
+TOPIC = '/bdbd/pantilt_camera/image_raw/compressed'
+FILE = '../data/pantilt.jpg'
 cvBridge = CvBridge()
 
 rospy.init_node('imageSave')

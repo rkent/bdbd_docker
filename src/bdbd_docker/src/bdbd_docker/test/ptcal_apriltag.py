@@ -76,7 +76,7 @@ while not rospy.is_shutdown():
     ptr.tilt = tilt
     pantilt_srv(SetPanTiltRequest(pan, tilt, True))
 
-    response = od_srv(pt_odr)
+    rospy.sleep(0.1); response = od_srv(pt_odr)
     count = len(response.class_names)
     if count != 1:
         rospy.logerr('No or duplicate target seen in center of pan/tilt')
@@ -101,7 +101,7 @@ while not rospy.is_shutdown():
 
         print('trying {} {}'.format(pan, tilt))
         pantilt_srv(SetPanTiltRequest(pan, tilt, True))
-        response = od_srv(pt_odr)
+        rospy.sleep(0.1); response = od_srv(pt_odr)
         if len(response.class_names):
             print('good')
             min_pan_good = pan
@@ -118,7 +118,7 @@ while not rospy.is_shutdown():
         pan = new_pan
         print('trying {} {}'.format(pan, tilt))
         pantilt_srv(SetPanTiltRequest(pan, tilt, True))
-        response = od_srv(pt_odr)
+        rospy.sleep(0.1); response = od_srv(pt_odr)
         if len(response.class_names):
             print('good')
             max_pan_good = pan
@@ -146,7 +146,7 @@ while not rospy.is_shutdown():
 
         print('trying {} {}'.format(pan, tilt))
         pantilt_srv(SetPanTiltRequest(pan, tilt, True))
-        response = od_srv(pt_odr)
+        rospy.sleep(0.1); response = od_srv(pt_odr)
         if len(response.class_names):
             print('good')
             min_tilt_good = tilt
@@ -162,7 +162,7 @@ while not rospy.is_shutdown():
         tilt = new_tilt
         print('trying {} {}'.format(pan, tilt))
         pantilt_srv(SetPanTiltRequest(pan, tilt, True))
-        response = od_srv(pt_odr)
+        rospy.sleep(0.1); response = od_srv(pt_odr)
         if len(response.class_names):
             print('good')
             max_tilt_good = tilt
@@ -181,7 +181,7 @@ while not rospy.is_shutdown():
             start_pan = pan
             while True:
                 pantilt_srv(SetPanTiltRequest(pan, tilt, True))
-                response = od_srv(pt_odr)
+                rospy.sleep(0.1); response = od_srv(pt_odr)
                 if len(response.class_names):
                     print('{}, {} good'.format(pan, tilt))
                     break
@@ -213,7 +213,7 @@ while not rospy.is_shutdown():
         for tilt in [min_tilt_good, max_tilt_good]:
             pantilt_srv(SetPanTiltRequest(90, 45, True))
             pantilt_srv(SetPanTiltRequest(pan, tilt, True))
-            response = od_srv(pt_odr)
+            rospy.sleep(0.1); response = od_srv(pt_odr)
             if len(response.class_names):
                 center = ( (response.xmin[0] + response.xmax[0]) / 2., (response.ymin[0] + response.ymax[0]) / 2.)
                 print('{}, {} good center {}'.format(pan, tilt, center))
@@ -234,7 +234,7 @@ while not rospy.is_shutdown():
         for tt in [tiltc/2, 3*tiltc/2]:
             pantilt_srv(SetPanTiltRequest(pp, tt, True))
             pantilt_srv(SetPanTiltRequest(panc, tiltc, True))
-            response = od_srv(pt_odr)
+            rospy.sleep(0.1); response = od_srv(pt_odr)
             if len(response.class_names):
                 center = ( (response.xmin[0] + response.xmax[0]) / 2., (response.ymin[0] + response.ymax[0]) / 2.)
                 xcs.append(center[0])
@@ -264,7 +264,7 @@ while not rospy.is_shutdown():
         for tt in [tiltc/2, 3*tiltc/2]:
             pantilt_srv(SetPanTiltRequest(pp, tt, True))
             pantilt_srv(SetPanTiltRequest(panc, tiltc, True))
-            response = od_srv(pt_odr)
+            rospy.sleep(0.1); response = od_srv(pt_odr)
             if len(response.class_names):
                 center = ( (response.xmin[0] + response.xmax[0]) / 2., (response.ymin[0] + response.ymax[0]) / 2.)
                 xcs.append(center[0])
@@ -283,7 +283,7 @@ while not rospy.is_shutdown():
         for tilt in np.linspace(min_tilt_good, max_tilt_good, 6):
             pantilt_srv(SetPanTiltRequest(90, 45, True))
             pantilt_srv(SetPanTiltRequest(pan, tilt, True))
-            response = od_srv(pt_odr)
+            rospy.sleep(0.1); response = od_srv(pt_odr)
             if len(response.class_names):
                 center = ( (response.xmin[0] + response.xmax[0]) / 2., (response.ymin[0] + response.ymax[0]) / 2.)
             else:

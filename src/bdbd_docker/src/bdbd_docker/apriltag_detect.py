@@ -26,6 +26,7 @@ def on_service_call(req):
 def main():
     rospy.init_node('apriltag_detect')
     rospy.Service('/bdbd/apriltagDetect', ObjectDetect, on_service_call)
+    image_pub = rospy.Publisher('/bdbd/apriltagDetect/image_raw/compressed', CompressedImage, queue_size=1)
 
     cvBridge = CvBridge()
 
@@ -49,6 +50,7 @@ def main():
             results = detector.detect(image)
             print('elapsed time {}'.format(time.time() - start))
             #print('result\n', results)
+            image_pub.publish(image_msg)
 
             if results:
                 result = results[0]

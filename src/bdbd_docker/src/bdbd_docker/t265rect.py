@@ -19,9 +19,15 @@ class T265():
     def camera_model(self, msg):
         pcm = PinholeCameraModel()
         pcm.fromCameraInfo(msg)
+        factor = 1.0
+        K = pcm.K.copy()
+        K[0, 0] = K[0, 0] / factor
+        K[1, 1] = K[1, 1] / factor
+        rwidth = int(factor * msg.width)
+        rheight = int(factor * msg.height)
         (self.m1, self.m2) = cv2.fisheye.initUndistortRectifyMap(
-            pcm.K, pcm.D[:4], pcm.R, pcm.P,
-            (msg.width, msg.height), cv2.CV_32FC1
+            K, pcm.D[:4], pcm.R, pcm.P,
+            (rwidth, rheight), cv2.CV_32FC1
         )
         self.subscribe_camera()
 
