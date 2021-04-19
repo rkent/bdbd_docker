@@ -189,6 +189,7 @@ catkin_install_python(PROGRAMS
   nodes/dialogpt
   nodes/object_classify
   nodes/object_detect
+  nodes/object_scan
   nodes/t265rect
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
