@@ -21,10 +21,10 @@ MODELS_DOWNLOAD_BASE = 'http://download.tensorflow.org/models/object_detection/t
 #MODEL_NAME = 'efficientdet_d3_coco17_tpu-32'
 #MODEL_NAME = 'efficientdet_d5_coco17_tpu-32'
 #MODEL_NAME = 'ssd_mobilenet_v2_320x320_coco17_tpu-8'
-#MODEL_NAME = 'ssd_resnet50_v1_fpn_640x640_coco17_tpu-8'
+MODEL_NAME = 'ssd_resnet50_v1_fpn_640x640_coco17_tpu-8'
 #MODEL_NAME = 'centernet_resnet50_v2_512x512_coco17_tpu-8'
 #MODEL_NAME = 'ssd_mobilenet_v2_fpnlite_640x640_coco17_tpu-8'
-MODEL_NAME = ''
+#MODEL_NAME = ''
 #MODEL_NAME = 'faster_rcnn_resnet50_v1_640x640_coco17_tpu-8'
 # For reasons that I do not understand, faster RPN as an output already prescales box sizes
 BOXES_STAGE1 = False # are these first stage boxes, that are already prescaled? 
@@ -60,6 +60,8 @@ model {
 CONFIG_OVERRIDE = ''
 if BOXES_STAGE1:
     CONFIG_OVERRIDE = CONFIG_OVERRIDE_FASTER
+else:
+    CONFIG_OVERRIDE = CONFIG_OVERRIDE_SSD
 
 class ObjectDetector():
     def __init__(self, use_gpu, model_level):
@@ -98,7 +100,7 @@ class ObjectDetector():
         path_to_model_tar = os.path.join(MODELS_DIR, tar_filename)
 
         if not os.path.exists(self.path_to_ckpt):
-            rospy.loginfo('Downloading model. This may take a while... ', end='')
+            rospy.loginfo('Downloading model. This may take a while... ')
             urllib.request.urlretrieve(model_download_link, path_to_model_tar)
             tar_file = tarfile.open(path_to_model_tar)
             tar_file.extractall(MODELS_DIR)
