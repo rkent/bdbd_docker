@@ -1,0 +1,100 @@
+%YAML:1.0
+
+#--------------------------------------------------------------------------------------------
+# Camera Parameters. Adjust them!
+#--------------------------------------------------------------------------------------------
+#
+# partial results of topic /t265/fisheye1/camera_info
+#D: [-0.006391948089003563, 0.04148074984550476, -0.039229270070791245, 0.006981444079428911, 0.0]
+#K: [285.0013122558594, 0.0, 424.4085998535156, 0.0, 285.1625061035156, 404.7959899902344, 0.0, 0.0, 1.0]
+#R: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+#P: [285.0013122558594, 0.0, 424.4085998535156, 0.0, 0.0, 285.1625061035156, 404.7959899902344, 0.0, 0.0, 0.0, 1.0, 0.0]
+#
+
+Camera.type: "KannalaBrandt8"
+
+# Camera calibration and distortion parameters (OpenCV) 
+Camera.fx: 285.0013122558594
+Camera.fy: 285.1625061035156
+Camera.cx: 424.4085998535156
+Camera.cy: 404.7959899902344
+
+# Equidistant distortion 0.0034823894022493434, 0.0007150348452162257, -0.0020532361418706202, 0.00020293673591811182
+# Camera.bFishEye: 1
+Camera.k1: -0.006391948089003563
+Camera.k2: 0.04148074984550476
+Camera.k3: -0.039229270070791245
+Camera.k4: 0.006981444079428911
+    
+# Camera resolution
+Camera.width: 848
+Camera.height: 800
+
+# Camera frames per second 
+Camera.fps: 30.0
+
+# Color order of the images (0: BGR, 1: RGB. It is ignored if images are grayscale)
+Camera.RGB: 1
+
+### Remainder are from file Monocular/TUM_512.yaml, not sure what they mean RKJ
+
+# IR projector baseline times fx (aprox.)
+Camera.bf: 40.0
+
+# Close/Far threshold. Baseline times.
+ThDepth: 40.0
+
+# Deptmap values factor
+DepthMapFactor: 1.0
+
+# Transformation from camera to body-frame (imu)
+Tbc: !!opencv-matrix
+   rows: 4
+   cols: 4
+   dt: f
+   data: [-9.99909424e-01, 1.16921373e-02, 6.66615119e-03, 1.06961204e-02,
+         -1.16943215e-02, -9.99931577e-01, -2.88769639e-04, 2.50235802e-04,
+          6.66231874e-03, -3.66699599e-04, 9.99977739e-01, -1.42560690e-04,
+         0.0, 0.0, 0.0, 1.0]
+
+# IMU noise
+IMU.NoiseGyro: 1.7e-4 #1.6968e-04 
+IMU.NoiseAcc: 2.0000e-3 #2.0e-3
+IMU.GyroWalk: 1.9393e-05 
+IMU.AccWalk: 3.0000e-03 # 3e-03
+IMU.Frequency: 200
+
+#--------------------------------------------------------------------------------------------
+# ORB Parameters
+#--------------------------------------------------------------------------------------------
+
+# ORB Extractor: Number of features per image
+ORBextractor.nFeatures: 5000
+
+# ORB Extractor: Scale factor between levels in the scale pyramid 	
+ORBextractor.scaleFactor: 1.2
+
+# ORB Extractor: Number of levels in the scale pyramid	
+ORBextractor.nLevels: 8
+
+# ORB Extractor: Fast threshold
+# Image is divided in a grid. At each cell FAST are extracted imposing a minimum response.
+# Firstly we impose iniThFAST. If no corners are detected we impose a lower value minThFAST
+# You can lower these values if your images have low contrast			
+ORBextractor.iniThFAST: 20
+ORBextractor.minThFAST: 7
+
+#--------------------------------------------------------------------------------------------
+# Viewer Parameters
+#--------------------------------------------------------------------------------------------
+Viewer.KeyFrameSize: 0.05
+Viewer.KeyFrameLineWidth: 1
+Viewer.GraphLineWidth: 0.9
+Viewer.PointSize:2
+Viewer.CameraSize: 0.08
+Viewer.CameraLineWidth: 3
+Viewer.ViewpointX: 0
+Viewer.ViewpointY: -0.7
+Viewer.ViewpointZ: -1.8
+Viewer.ViewpointF: 500
+

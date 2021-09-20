@@ -121,13 +121,16 @@ class ObjectDetector():
         #    print('config key', key)
 
     def load_tf(self, use_gpu):
-        #os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'    # Suppress TensorFlow logging
+        #os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'    # Suppress TensorFlow logging
         if not use_gpu:
             os.environ["CUDA_VISIBLE_DEVICES"] = "-1"   # disable GPU
 
         if LIMIT_GROWTH:
             os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true' # stop grabbing all memory
         import tensorflow as tf
+        # TODO: this regularly generates retracing errors, which I suppress.
+        import logging
+        tf.get_logger().setLevel(logging.ERROR)
         self.tf = tf
 
     def make_detect_fn(self):
@@ -178,7 +181,7 @@ class ObjectDetector():
         ckpt = tf.compat.v2.train.Checkpoint(model=detection_model)
         ckpt.restore(os.path.join(self.path_to_ckpt, 'ckpt-0')).expect_partial()
 
-        @tf.function
+        @tf.function(experimental_relax_shapes=True)
         def detect_fn(image):
             """Detect objects in image."""
             image, shapes = detection_model.preprocess(image)

@@ -8,18 +8,21 @@ from cv_bridge import CvBridge
 from image_geometry import PinholeCameraModel
 import math
 import traceback
+from bdbd_common.doerRequest import DoerRequest
+dr = DoerRequest()
 
 PANTILT_CAMERA = '/bdbd/pantilt_camera/image_raw/compressed'
 FISHEYE_CAMERA = '/t265/fisheye1/image_raw/compressed'
 OBJECT_COUNT = 10 # number of objects to attempt to classify
 RADIANS_TO_DEGREES = 180. / math.pi
 MIN_SIZE = 100
-MAX_SIZE = 600
+MAX_SIZE = 10000
 MIN_DETECT_SCORE = 0.15
 MAX_CLOSE_ANGLE = 30
-MAX_FISHEYE_OBJECTS=5
+MAX_FISHEYE_OBJECTS = 4
 ASPECT_LIMIT = 2.0
 DO_PAD = True
+MIN_CLASSIFY_SCORE = 0.70
 
 # projected angles of image point p given pinhole camera model pcm 
 def dot_angles(pcm, p):
@@ -39,16 +42,17 @@ def main():
     cvBridge = CvBridge()
     objectClassifier = ObjectClassifier()
 
-    od_srv = rospy.ServiceProxy('/bdbd/objectDetect', ObjectDetect)
-    pantilt_srv = rospy.ServiceProxy('/bdbd/set_pan_tilt', SetPanTilt)
+    od_srv = dr.ServiceProxy('/bdbd/objectDetect', ObjectDetect, timeout=60.0)
+    pantilt_srv = dr.ServiceProxy('/bdbd/set_pan_tilt', SetPanTilt)
     image_compressed_pub = rospy.Publisher('/object_scan/image_raw/compressed', CompressedImage, queue_size=1)
     image_objects_pub = rospy.Publisher('/object_scan/objects/image_raw/compressed', CompressedImage, queue_size=1)
+    object_image_pub = rospy.Publisher('/object_scan/object/image_raw/compressed', CompressedImage, queue_size=1)
 
     #print(odr)
-    print('waiting for objectDetect service', flush=True, end='... ')
-    rospy.wait_for_service('/bdbd/objectDetect')
-    print('done')
-    fisheye_info_msg = rospy.wait_for_message(getCameraTopicBase(FISHEYE_CAMERA) + '/camera_info', CameraInfo)
+    #print('waiting for objectDetect service', flush=True, end='... ')
+    #rospy.wait_for_service('/bdbd/objectDetect')
+    #print('done')
+    fisheye_info_msg = dr.wait_for_message(getCameraTopicBase(FISHEYE_CAMERA) + '/camera_info', CameraInfo)
     pcm_fisheye = PinholeCameraModel()
     pcm_fisheye.fromCameraInfo(fisheye_info_msg)
 
@@ -70,6 +74,7 @@ def main():
             object_indicies = []
             for i in range(len(fe_response.scores)):
                 name = fe_response.class_names[i]
+                print('name {} score {}'.format(name, fe_response.scores[i]))
                 fisheye_object_center = ((fe_response.xmin[i] + fe_response.xmax[i])/2, (fe_response.ymin[i]+ fe_response.ymax[i])/2)
                 xd = fe_response.xmax[i] - fe_response.xmin[i]
                 yd = fe_response.ymax[i] - fe_response.ymin[i]
@@ -102,7 +107,7 @@ def main():
                 print('done')
 
                 # get the pantilt image
-                pantilt_msg = rospy.wait_for_message(PANTILT_CAMERA, CompressedImage)
+                pantilt_msg = dr.wait_for_message(PANTILT_CAMERA, CompressedImage)
 
                 # locate objects in this image
                 # Pantilt image objects
@@ -126,10 +131,12 @@ def main():
                     )
                 print('pantilt: ' + sstr('object_scores object_names'))
                 combined_image = objectClassifier.annotate_image(labels, object_scores, object_names, object_images)
-                combined_image_msg = cvBridge.cv2_to_compressed_imgmsg(combined_image)
-                image_msg = cvBridge.cv2_to_compressed_imgmsg(image_np)
-                image_compressed_pub.publish(image_msg)
-                image_objects_pub.publish(combined_image_msg)
+                if (image_compressed_pub.get_num_connections() > 0):
+                    image_msg = cvBridge.cv2_to_compressed_imgmsg(image_np)
+                    image_compressed_pub.publish(image_msg)
+                if (image_objects_pub.get_num_connections() > 0):
+                    combined_image_msg = cvBridge.cv2_to_compressed_imgmsg(combined_image)
+                    image_objects_pub.publish(combined_image_msg)
 
                 (best_i, best_score, best_name) = best_label(labels)
                 sorted_labels = sort_labels(labels)
@@ -163,17 +170,21 @@ def main():
                     
                     delta_factor = 0.20
                     for count in range(2):
-                        (best_score, best_name, xd, yd, xc, yc, combined_image) = \
+                        (best_score, best_name, best_image, xd, yd, xc, yc, combined_image) = \
                             objectClassifier.refine_class(
                                 image_np, xd, yd, xc, yc,
                                 delta_factor=delta_factor,
                                 first_name=name, first_score=score)
                         print('refine ' + sstr('best_score best_name xc yc xd yd'))
-                        combined_image_msg = cvBridge.cv2_to_compressed_imgmsg(combined_image)
-                        image_objects_pub.publish(combined_image_msg)
+                        if (image_objects_pub.get_num_connections() > 0):
+                            combined_image_msg = cvBridge.cv2_to_compressed_imgmsg(combined_image)
+                            image_objects_pub.publish(combined_image_msg)
                         delta_factor /= 2
+                    if (best_score > MIN_CLASSIFY_SCORE):
+                        if (object_image_pub.get_num_connections() > 0):
+                            object_image_msg = cvBridge.cv2_to_compressed_imgmsg(best_image)
+                            object_image_pub.publish(object_image_msg)
                     
-
         except rospy.ServiceException as exception:
             if rospy.is_shutdown():
                 break

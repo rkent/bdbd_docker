@@ -2,7 +2,7 @@ from numpy.core.fromnumeric import resize
 import rospy
 from bdbd_common.srv import ObjectDetect, ObjectDetectRequest, ObjectDetectResponse
 from bdbd_common.utils import fstr, sstr
-from bdbd_common.messageSingle import messageSingle
+from bdbd_common.doerRequest import DoerRequest
 from sensor_msgs.msg import CompressedImage, CameraInfo
 from cv_bridge import CvBridge
 from rospy import ServiceException
@@ -19,6 +19,8 @@ import numpy as np
 from tensorflow.keras.applications.imagenet_utils import decode_predictions 
 #from tensorflow.keras.applications.resnet_v2 import ResNet50V2, decode_predictions, preprocess_input
 from tensorflow.keras.applications.xception import Xception, decode_predictions, preprocess_input
+
+dr = DoerRequest()
 
 #Load the model 
 #resnet_model = ResNet50V2(weights = 'imagenet') 
@@ -37,22 +39,22 @@ REPORT_COUNT = 9 # number of objects to report
 XSIZE = 299
 YSIZE = 299
 RATE = 1.0
-rospy.init_node('test')
+rospy.init_node('odService')
 
 cvBridge = CvBridge()
 
 image_compressed_pub = rospy.Publisher('/odService/image_raw/compressed', CompressedImage, queue_size=1)
 image_objects_pub = rospy.Publisher('/odService/objects/image_raw/compressed', CompressedImage, queue_size=1)
 
-od_srv = rospy.ServiceProxy('/bdbd/objectDetect', ObjectDetect)
+print('waiting for objectDetect')
+od_srv = dr.ServiceProxy('/bdbd/objectDetect', ObjectDetect, timeout=60.0)
 odr = ObjectDetectRequest()
 odr.image_topic = CAMERA
 odr.max_detections = OBJECT_COUNT
 odr.min_threshold = 0.02
 odr.header.stamp = rospy.Time.now()
 #print(odr)
-print('waiting for service')
-rospy.wait_for_service('/bdbd/objectDetect')
+#rospy.wait_for_service('/bdbd/objectDetect')
 
 from image_geometry import PinholeCameraModel
 class T265():
@@ -61,7 +63,7 @@ class T265():
         self.topic_base = topic_base
         rospy.loginfo('Getting camera_info for ' + topic_base)
         pcm = PinholeCameraModel()
-        pcm.fromCameraInfo(messageSingle(topic_base + '/camera_info', CameraInfo))
+        pcm.fromCameraInfo(dr.wait_for_message(topic_base + '/camera_info', CameraInfo))
         self.camera_model = pcm
 
     def info_cb(self, msg):
@@ -96,7 +98,7 @@ rate = rospy.Rate(RATE)
 try:
     t265 = T265()
     pi_model = PinholeCameraModel()
-    pi_model.fromCameraInfo(messageSingle('bdbd/pantilt_camera/camera_info', CameraInfo))
+    pi_model.fromCameraInfo(dr.wait_for_message('bdbd/pantilt_camera/camera_info', CameraInfo))
     while not rospy.is_shutdown():
         # get the camera model
 
@@ -156,7 +158,7 @@ try:
                 print(fstr(dd))
                 '''
 
-                print(sstr('t265_ray t265_point pi_point nname'))
+                rospy.loginfo(sstr('t265_ray t265_point pi_point nname'))
                 # with padding
                 image_slice = image_np[ymin:ymax, xmin:xmax, :]
 
@@ -177,7 +179,7 @@ try:
                 object_scores.append(response.scores[index])
                 object_names.append(response.class_names[index])
 
-            print(fstr({'object detector classes': object_names}))
+            rospy.loginfo(fstr({'object detector classes': object_names}))
             count = min(9, len(object_images))
             # Convert the image / images into batch format
             #image_batch = np.expand_dims(object_images[0], axis = 0)

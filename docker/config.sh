@@ -6,6 +6,7 @@ export IMAGE_NAME="bdbd"
 export BASE_NAME="bdbd"
 export CUDA_VERSION="11.0"
 export CUDA_MAJOR_VERSION=${CUDA_VERSION%.*}
+export ORB_SLAM3_VERSION="v0.3-beta"
 export OS="ubuntu20.04"
 export TF_VERSION="2.4.0"
 export ROS_VERSION="noetic"

@@ -264,7 +264,8 @@ class ObjectClassifier():
         yc = (ymins[best_i] + ymaxs[best_i]) / 2
         xd = (xmaxs[best_i] - xmins[best_i])
         yd = (ymaxs[best_i] - ymins[best_i])
-        return (best_score, best_name, xd, yd, xc, yc, combined_image)
+        best_image = object_images[best_i]
+        return (best_score, best_name, best_image, xd, yd, xc, yc, combined_image)
 
 if __name__ == '__main__':
     # test

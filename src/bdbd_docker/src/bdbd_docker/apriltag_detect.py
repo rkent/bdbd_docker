@@ -1,6 +1,8 @@
 import rospy
 from bdbd_common.srv import ObjectDetect, ObjectDetectResponse
 from sensor_msgs.msg import CompressedImage
+from bdbd_common.imageRectify import ImageRectify
+
 from cv_bridge import CvBridge
 from rospy import ServiceException
 import apriltag
@@ -16,6 +18,14 @@ OBJECT_COUNT = 12 # number of objects to attempt to classify
 
 service_queue = Queue()
 detector = apriltag.Detector()
+image_rectifiers = {}
+
+def getCameraTopicBase(imageTopic):
+    baseTopic = None
+    offset = imageTopic.find('/image_')
+    if offset >= 0:
+        baseTopic = imageTopic[:offset]
+    return baseTopic
 
 def on_service_call(req):
     responseQueue = Queue()
@@ -44,8 +54,29 @@ def main():
             else:
                 image_msg = service_msg.image
 
-            image_np = cvBridge.compressed_imgmsg_to_cv2(image_msg, desired_encoding='bgr8')
-            image = cv2.cvtColor(image_np, cv2.COLOR_BGR2GRAY)
+            # get rectifier appropriate for the image topic
+            cameraTopicBase = getCameraTopicBase(imageTopic)
+            if cameraTopicBase in image_rectifiers:
+                print('Found image rect for base')
+                imageRectify = image_rectifiers[cameraTopicBase]
+            else:
+                print('looking for image rect for base')
+                try:
+                    imageRectify = ImageRectify(cameraTopicBase, do_publish=True)
+                except rospy.ROSException as exception:
+                    rospy.logwarn('Cannot rectify, proceeding without: ({})'.format(exception))
+                    imageRectify = None
+            if imageRectify and imageRectify.info_msg.distortion_model != 'equidistant':
+                imageRectify = None
+            image_rectifiers[cameraTopicBase] = imageRectify
+            if imageRectify:
+                image = imageRectify.get(image_msg)
+            else:
+                print('no imageRectify')
+                image = cvBridge.compressed_imgmsg_to_cv2(image_msg, desired_encoding='bgr8')
+            print(image.shape)
+            if len(image.shape) == 3 and image.shape[2] == 3:
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             start = time.time()
             results = detector.detect(image)
             print('elapsed time {}'.format(time.time() - start))

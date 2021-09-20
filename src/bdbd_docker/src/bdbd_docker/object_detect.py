@@ -10,10 +10,13 @@ from bdbd_common.utils import fstr, sstr, getShape, gstr
 from bdbd_docker.libpy.objectDetector import ObjectDetector
 from bdbd_common.messageSingle import messageSingle
 from bdbd_common.imageRectify import ImageRectify
+from bdbd_common.doerRequest import DoerRequest
 from sensor_msgs.msg import CompressedImage
 import traceback
 from bdbd_common.srv import ObjectDetect, ObjectDetectResponse
 from queue import Queue
+
+dr = DoerRequest()
 
 # adapted from
 #  https://tensorflow-object-detection-api-tutorial.readthedocs.io/en/latest/auto_examples/object_detection_camera.html#sphx-glr-auto-examples-object-detection-camera-py
@@ -30,6 +33,7 @@ CAMERA_BASE = ''
 #CAMERA_BASE = '/t265/fisheye1'
 
 USE_GPU = False
+DO_FACES = True
 PARAMETERS = (
     ('use_gpu', USE_GPU),
     ('max_detections', 30),
@@ -38,6 +42,8 @@ PARAMETERS = (
     ('model_level', 0)
 )
 
+if DO_FACES:
+    from bdbd_docker.libpy.face_detect import extract_faces
 # keyed by topic base
 image_rectifiers = {}
 
@@ -117,20 +123,42 @@ def main():
                     if imageRectify and imageRectify.info_msg.distortion_model != 'equidistant':
                         imageRectify = None
                     image_rectifiers[cameraTopicBase] = imageRectify
-                    image_msg = messageSingle(imageTopic, CompressedImage)
+                    image_msg = dr.wait_for_message(imageTopic, CompressedImage, timeout=10.0)
                     if imageRectify:
                         image_np = imageRectify.get(image_msg)
             if image_np is None and image_msg is None:
                 rospy.sleep(.02)
             else:
                 print('asking for detections')
+                if image_np is None and image_msg is not None:
+                    image_np = od.cv_bridge.compressed_imgmsg_to_cv2(image_msg, desired_encoding='bgr8')
                 if image_np is not None:
+                    # gray to color if needed
+                    if len(image_np.shape) == 2 or image_np.shape[2] != 3:
+                        image_np = cv2.cvtColor(image_np, cv2.COLOR_GRAY2RGB)
                     (boxes, class_ids, class_names, scores) = od.detection_np(image_np, min_threshold, max_detections, image_msg)
-                else:
-                    (boxes, class_ids, class_names, scores) = od.detection(image_msg, min_threshold, max_detections)
                 print(fstr({'num_detected': len(boxes)}))
+
+                if DO_FACES:
+                    MIN_SIZE = 30
+                    MIN_SCORE = 0.90
+                    faces, results = extract_faces(image_np, min_size=(MIN_SIZE, MIN_SIZE), min_confidence=MIN_SCORE)
+                    rospy.loginfo('found {} faces'.format(len(faces)))
+                    for result in results:
+                        x1, y1, width, height = result['box']
+                        if width < MIN_SIZE or height < MIN_SIZE or result['confidence'] < MIN_SCORE:
+                            continue
+                        # add this to the detections at the beginning
+                        boxes.insert(0, tuple(map(float, (y1, x1, y1 + height, x1 + width))))
+                        class_ids.insert(0, 101)
+                        class_names.insert(0,'face')
+                        scores.insert(0, result['confidence'])
+                        #print(result)
+
+                rospy.loginfo('Found {} objects'.format(len(boxes)))
                 for i in range(len(boxes)):
                     print(fstr({'score': scores[i], 'id': class_ids[i], 'name': class_names[i], 'box': boxes[i]}))
+
                 if response_queue:
                     response = ObjectDetectResponse()
                     # match the response header to the request header for synchronization
@@ -155,9 +183,9 @@ def main():
                     objectDetectService = rospy.Service('/bdbd/objectDetect', ObjectDetect, on_service_call)
 
         except (SystemExit, KeyboardInterrupt):
-            break;
+            break
         except:
-            rospy.logwarn(traceback.format_exc())
+            rospy.logwarn('object_detect failed: {}'.format(traceback.format_exc()))
             break
 
 if __name__ == '__main__':

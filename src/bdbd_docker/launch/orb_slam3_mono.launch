@@ -1,0 +1,8 @@
+<launch>
+    <param name="/bdbd/orb3/image_transport" value="compressed" />
+    <remap to="/t265/fisheye1/image_raw/compressed" from="/camera/image_raw/compressed" />
+    <remap to="/t265/fisheye1/image_raw" from="/camera/image_raw" />
+    <node name="orb3" pkg="ORB_SLAM3" type="Mono" ns="bdbd" output="screen" 
+        args="/home/kent/github/rkent/ORB_SLAM3/Vocabulary/ORBvoc.txt $(dirname)/orb_slam3.yaml"
+    />
+</launch>

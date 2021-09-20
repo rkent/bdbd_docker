@@ -1,0 +1,55 @@
+FROM bdbd/base18:latest
+
+ARG ORB_SLAM3_VERSION
+
+#https://stackoverflow.com/questions/29663459/python-app-does-not-print-anything-when-running-detached-in-docker
+ENV PYTHONUNBUFFERED=1
+
+### Prerequisites
+
+# (1) OpenCV, Eigen
+RUN apt-get update && apt-get install -y \
+  python3-opencv \
+  libeigen3-dev
+
+# (2) Pangolin
+RUN git clone --recursive https://github.com/stevenlovegrove/Pangolin.git
+WORKDIR /Pangolin 
+RUN git checkout v0.5
+
+RUN apt-get install -y \
+  cmake \
+  libglew-dev \
+  libpython2.7-dev \
+  ffmpeg libavcodec-dev libavutil-dev libavformat-dev libswscale-dev libuvc-dev \
+  libjpeg-dev libpng-dev libtiff5-dev libopenexr-dev \
+  sudo
+
+ENV DEBIAN_FRONTEND=noninteractive
+# Don't require -y in apt-get commands to continue
+RUN echo 'APT::Get::Assume-Yes "true";' > /etc/apt/apt.conf
+
+# Install dependencies (as described above, or your preferred method)
+#RUN scripts/install_prerequisites.sh recommended
+
+# Configure and build
+RUN mkdir build
+WORKDIR /Pangolin/build
+RUN cmake ..
+RUN cmake --build . -- -j4
+
+RUN make install
+
+# ORB-SLAM3 itself
+WORKDIR /root
+RUN git clone https://github.com/UZ-SLAMLab/ORB_SLAM3.git
+WORKDIR /root/ORB_SLAM3
+
+RUN apt install -y \
+  libopencv-dev
+
+RUN apt install -y libboost-serialization-dev
+
+RUN apt install libssl-dev
+RUN chmod +x build.sh
+#RUN ./build.sh

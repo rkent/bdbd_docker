@@ -5,7 +5,7 @@ from bdbd_common.utils import fstr, sstr
 from sensor_msgs.msg import CompressedImage, CameraInfo
 
 rospy.init_node('apriltag_test')
-CAMERA = '/bdbd/pantilt_camera/image_raw/compressed'
+CAMERA = '/t265/fisheye1/image_raw/compressed'
 OBJECT_COUNT = 12
 od_srv = rospy.ServiceProxy('/bdbd/apriltagDetect', ObjectDetect)
 
